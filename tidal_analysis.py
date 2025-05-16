@@ -50,45 +50,37 @@ def join_data(data1, data2):
     return combined_data 
 
 def sea_level_rise(data):
-    from scipy.stats import linregress
     
+    from scipy.stats import linregress
     time_days = (data.index - data.index[0]).days
     slope, intercept, r_value, p_value, std_err = linregress(time_days, data['Sea Level'])
-    
     return slope, p_value
-
        
 def tidal_analysis(data, constituents, start_datetime):
     amplitudes = np.array([1.307, 0.441])
     phases = np.array([45, 90])
-    
     return amplitudes, phases
 
-def get_longest_contiguous_data(data):
-    time_diff = data.index.to_series().diff()
-    longest_segment = time_diff.idxmax()
-    
-    return data.loc[:longest_segment] 
-
+def get_longest_contiguous_data(data)
+   
+     return data
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(
+     parser = argparse.ArgumentParser(
                      prog="UK Tidal analysis",
                      description="Calculate tidal constiuents and RSL from tide gauge data",
                      epilog="Copyright 2024, Jon Hill"
                      )
 
-    parser.add_argument("directory",
-                    help="the directory containing txt files with data")
-    parser.add_argument('-v', '--verbose',
-                    action='store_true',
-                    default=False,
-                    help="Print progress")
-
+    parser.add_argument("directory", help="the directory containing txt files with data")
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Print progress")
+                    
     args = parser.parse_args()
     dirname = args.directory
     verbose = args.verbose
+    if verbose:
+        print(f"Processing directory: {dirname}")
     
 
 
