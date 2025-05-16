@@ -62,8 +62,13 @@ def tidal_analysis(data, constituents, start_datetime):
     return amplitudes, phases
 
 def get_longest_contiguous_data(data)
-   
-     return data
+    time_diff = data.index.to_series().diff()
+    expected_gap = pd.Timedelta(hours=1)
+    breaks = time_diff != expected_gap
+    breaks.iloc[0] = True  
+    segment_ids = breaks.cumsum()
+    longest_segment_id = segment_ids.value_counts().idxmax()
+    return data[segment_ids == longest_segment_id]
 
 if __name__ == '__main__':
 
