@@ -43,7 +43,7 @@ def extract_section_remove_mean(start, end, data):
      
 def join_data(data1, data2):
    
-    if 'Sea Level' not in data1.columns.columns or 'Sea Level' not in data2.columns:
+    if 'Sea Level' not in data1.columns or 'Sea Level' not in data2.columns:
         raise ValueError("Both datasets must contain a 'Sea Level' column.")
     combined_data = pd.concat([data1, data2])
     combined_data.sort_index(inplace=True)
