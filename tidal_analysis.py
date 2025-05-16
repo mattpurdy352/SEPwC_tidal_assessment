@@ -32,24 +32,22 @@ def extract_single_year_remove_mean(year, data):
     return year_data 
 
 def extract_section_remove_mean(start, end, data):
+
     start_datetime = pd.to_datetime(start, format='%Y%m%d')
     end_datetime = pd.to_datetime(end, format='%Y%m%d')
-    
     section_data = data[(data.index >= start_datetime) & (data.index <= end_datetime)]
     mean_sea_level = section_data['Sea Level'].mean()
+    section_data = section_data.copy
     section_data['Sea Level'] = section_data['Sea Level'] - mean_sea_level
-    
-    return section_data
-
-
+    return section_data 
+     
 def join_data(data1, data2):
+   
+    if 'Sea Level' not in data1.columns.columns or 'Sea Level' not in data2.columns:
+        raise ValueError("Both datasets must contain a 'Sea Level' column.")
     combined_data = pd.concat([data1, data2])
     combined_data.sort_index(inplace=True)
-    
-    if 'Sea Level' not in combined_data.columns:
-        raise ValueError("Both datasets must contain a 'Sea Level' column.")
-        
-    return combined_data
+    return combined_data 
 
 def sea_level_rise(data):
     from scipy.stats import linregress
