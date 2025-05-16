@@ -70,22 +70,60 @@ def get_longest_contiguous_data(data)
     longest_segment_id = segment_ids.value_counts().idxmax()
     return data[segment_ids == longest_segment_id]
 
-if __name__ == '__main__':
+def reconstruct_tide(data, constituents, start_datetime):
+    time_hours = (data.index - start_dt).total_seconds() / 3600.0
+    y = data['Sea Level'].values
+    
+    coef = solve(time_hours, y, constit=constituents, method='ols', nodal=False, trend=False, Rayleigh_min=0.95)
+    tide = reconstruct(time_hours, coef)
+    return tide.h, coef
 
-     parser = argparse.ArgumentParser(
-                     prog="UK Tidal analysis",
-                     description="Calculate tidal constiuents and RSL from tide gauge data",
-                     epilog="Copyright 2024, Jon Hill"
-                     )
+def plot_tide_fit(data, reconstructed, title="Tide Fit"):
+    plt.figure(figsize=(15, 6))
+
+    plt.plot(data.index, data['Sea Level'], label='Observed', color='black', linewidth=1)
+    plt.plot(data.index, reconstructed, label='Reconstructed', color='blue', linestyle='--', linewidth=1)
+    plt.plot(data.index, data['Sea Level'] - reconstructed, label='Residual', color='red', alpha=0.6)
+
+    plt.xlabel("Time")
+    plt.ylabel("Sea Level (m)")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        prog="UK Tidal analysis",
+        description="Calculate tidal constituents and RSL from tide gauge data",
+        epilog="Copyright 2024, Jon Hill"
+    )
 
     parser.add_argument("directory", help="the directory containing txt files with data")
     parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Print progress")
-                    
+    parser.add_argument('--plot', action='store_true', default=False, help="Plot tidal reconstruction")
+
     args = parser.parse_args()
     dirname = args.directory
     verbose = args.verbose
+    do_plot = args.plot
+
     if verbose:
         print(f"Processing directory: {dirname}")
+
+    # Example: Use Aberdeen 1946–1947 data for plotting
+    gauge_files = [f"{dirname}/1946ABE.txt", f"{dirname}/1947ABE.txt"]
+    data1 = read_tidal_data(gauge_files[0])
+    data2 = read_tidal_data(gauge_files[1])
+    data = join_data(data1, data2)
+
+    section = extract_section_remove_mean("19460115", "19470310", data)
+    start_dt = datetime(1946, 1, 15, 0, 0, 0, tzinfo=pytz.UTC)
+
+    if do_plot:
+        reconstructed, coef = reconstruct_tide(section, ['M2', 'S2'], start_dt)
+        plot_tide_fit(section, reconstructed, title="Harmonic Tidal Fit")
     
 
 
