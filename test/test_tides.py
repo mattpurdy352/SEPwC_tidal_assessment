@@ -32,6 +32,8 @@ class TestTidalAnalysis():
     
     def test_join_data(self):
 
+        with pytest.raises(ValueError):
+            join_data(data1, data2)
         gauge_files = ['data/1946ABE.txt', 'data/1947ABE.txt']
 
         data1 = read_tidal_data(gauge_files[1])
