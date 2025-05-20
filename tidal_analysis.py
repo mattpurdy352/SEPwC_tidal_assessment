@@ -4,6 +4,10 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import pytz
+from utide import solve, reconstruct
+import matplotlib.pyplot as plt
+from scipy.stats import lingregress
+import os
 
 def read_tidal_data(filename):
 
