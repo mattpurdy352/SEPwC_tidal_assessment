@@ -20,9 +20,6 @@ def read_tidal_data(filename):
     except FileNotFoundError:
         raise FileNotFoundError(f"The file {filename} was not found.")
     
-def extract_single_year_remove_mean(year, data):
-   
-
 def extract_section_remove_mean(start, end, data):
  year = int(year)
     year_data = data[data.index.year == year].copy()
@@ -32,13 +29,13 @@ def extract_section_remove_mean(start, end, data):
     return year_data 
 
 def extract_section_year_remove_mean(year, data):
-    start_datetime = pd.to_datetime(start, format='%Y%m%d').replace(tzinfo=pytz.UTC)
-    end_datetime = pd.to_datetime(end, format='%Y%m%d').replace(tzinfo=pytz.UTC)
+     start_datetime = pd.to_datetime(start, format='%Y%m%d')
+    end_datetime = pd.to_datetime(end, format='%Y%m%d')
     section_data = data[(data.index >= start_datetime) & (data.index <= end_datetime)].copy()
-     if not section_data.empty:
-    mean_sea_level = section_data['Sea Level'].mean()
-    section_data['Sea Level'] = section_data['Sea Level'] - mean_sea_level
-    return section_data 
+    if not section_data.empty:
+        mean_sea_level = section_data['Sea Level'].mean()
+        section_data['Sea Level'] = section_data['Sea Level'] - mean_sea_level
+    return section_data
      
 def join_data(data1, data2):
    
@@ -49,8 +46,6 @@ def join_data(data1, data2):
     return combined_data 
 
 def sea_level_rise(data):
-    
-    from scipy.stats import linregress
     time_days = (data.index - data.index[0]).days
     slope, intercept, r_value, p_value, std_err = linregress(time_days, data['Sea Level'])
     return slope, p_value
