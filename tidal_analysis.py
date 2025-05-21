@@ -79,7 +79,7 @@ def get_longest_contiguous_data(data)
     return data[segment_ids == longest_segment_id]
 
 def reconstruct_tide(data, constituents, start_datetime):
-    time_hours = (data.index - start_dt).total_seconds() / 3600.0
+    time_hours = (data.index - start_datetime).total_seconds() / 3600.0
     y = data['Sea Level'].values
     
     coef = solve(time_hours, y, constit=constituents, method='ols', nodal=False, trend=False, Rayleigh_min=0.95)
