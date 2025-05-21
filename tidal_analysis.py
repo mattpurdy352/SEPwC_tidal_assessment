@@ -21,7 +21,7 @@ def read_tidal_data(filename):
         raise FileNotFoundError(f"The file {filename} was not found.")
     
 def extract_section_remove_mean(start, end, data):
- year = int(year)
+    year = int(year)
     year_data = data[data.index.year == year].copy()
     if not year_data.empty:
         mean_sea_level = year_data['Sea Level'].mean()
@@ -38,7 +38,6 @@ def extract_section_year_remove_mean(year, data):
     return section_data
      
 def join_data(data1, data2):
-   
     if 'Sea Level' not in data1.columns or 'Sea Level' not in data2.columns:
         raise ValueError("Both datasets must contain a 'Sea Level' column.")
     combined_data = pd.concat([data1, data2])
