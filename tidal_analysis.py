@@ -2,9 +2,9 @@
 import argparse
 import pandas as pd 
 import numpy as np
+from utide import solve, reconstruct
 from datetime import datetime
 import pytz
-from utide import solve, reconstruct
 import matplotlib.pyplot as plt
 from scipy.stats import lingregress
 import os
