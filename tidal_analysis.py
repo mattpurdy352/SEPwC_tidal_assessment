@@ -6,12 +6,12 @@ from utide import solve, reconstruct
 from datetime import datetime
 import pytz
 import matplotlib.pyplot as plt
-from scipy.stats import lingregress
+from scipy.stats import linregress
 import os
 
 def read_tidal_data(filename):
      try:
-       data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
+        data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
         data['Time'] = pd.to_datetime(data['Time'], format='%Y%m%d%H%M', errors='coerce')
         data.set_index('Time', inplace=True)
         data['Sea Level'] = pd.to_numeric(data['Sea Level'], errors='coerce')
@@ -69,7 +69,7 @@ def tidal_analysis(data, constituents, start_datetime):
             phases.append(np.nan)
     return np.array(amps), np.array(phases)
 
-def get_longest_contiguous_data(data)
+def get_longest_contiguous_data(data):
     time_diff = data.index.to_series().diff()
     expected_gap = pd.Timedelta(hours=1)
     breaks = time_diff != expected_gap
