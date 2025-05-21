@@ -11,7 +11,7 @@ import os
 
 def read_tidal_data(filename):
      try:
-       data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
+        data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
         data['Time'] = pd.to_datetime(data['Time'], format='%Y%m%d%H%M', errors='coerce')
         data.set_index('Time', inplace=True)
         data['Sea Level'] = pd.to_numeric(data['Sea Level'], errors='coerce')
