@@ -10,34 +10,28 @@ from scipy.stats import lingregress
 import os
 
 def read_tidal_data(filename):
-
      try:
-         # Read the data into a DataFrame
-        data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
-        
-        # Convert 'Time' to a datetime index
+       data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
         data['Time'] = pd.to_datetime(data['Time'], format='%Y%m%d%H%M', errors='coerce')
         data.set_index('Time', inplace=True)
-        
-        # Ensure that the 'Sea Level' column is numeric, in case of non-numeric values
         data['Sea Level'] = pd.to_numeric(data['Sea Level'], errors='coerce')
-        
+        data.dropna(subset=['Sea Level'], inplace=True)
         return data
     except FileNotFoundError:
         raise FileNotFoundError(f"The file {filename} was not found.")
     
 def extract_single_year_remove_mean(year, data):
-  
-    year = int(year)
-    year_data = data[data.index.year == year_int].copy
-     if not year_data.empty:
-    mean_sea_level = year_data['Sea Level'].mean()
-    year_data = year_data.copy()
-    year_data['Sea Level'] = year_data['Sea Level'] - mean_sea_level
-    return year_data 
+   
 
 def extract_section_remove_mean(start, end, data):
+ year = int(year)
+    year_data = data[data.index.year == year].copy()
+    if not year_data.empty:
+        mean_sea_level = year_data['Sea Level'].mean()
+        year_data['Sea Level'] = year_data['Sea Level'] - mean_sea_level
+    return year_data 
 
+def extract_section_year_remove_mean(year, data):
     start_datetime = pd.to_datetime(start, format='%Y%m%d').replace(tzinfo=pytz.UTC)
     end_datetime = pd.to_datetime(end, format='%Y%m%d').replace(tzinfo=pytz.UTC)
     section_data = data[(data.index >= start_datetime) & (data.index <= end_datetime)].copy()
