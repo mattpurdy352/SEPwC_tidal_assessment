@@ -51,9 +51,24 @@ def sea_level_rise(data):
     return slope, p_value
        
 def tidal_analysis(data, constituents, start_datetime):
-    amplitudes = np.array([1.307, 0.441])
-    phases = np.array([45, 90])
-    return amplitudes, phases
+   if data.empty:
+        return np.array([]), np.array([])
+    time_hours = (data.index - start_datetime).total_seconds() / 3600.0
+    y = data['Sea Level'].values
+    valid = ~np.isnan(y)
+    coef = solve(time_hours[valid], y[valid], constit=constituents, method='ols', nodal=False, trend=False)
+    amps = []
+    phases = []
+    for c in constituents:
+        try:
+            i = coef.name.index(c)
+            amps.append(coef.A[i])
+            phases.append(coef.g[i])
+        except ValueError:
+            print(f"Warning: Constituent '{c}' not found in the solution.")
+            amps.append(np.nan)  
+            phases.append(np.nan)
+    return np.array(amps), np.array(phases)
 
 def get_longest_contiguous_data(data)
     time_diff = data.index.to_series().diff()
