@@ -37,8 +37,8 @@ class TestTidalAnalysis():
         df_no_sea_level_1 = pd.DataFrame({'colA': [1, 2]}, index=pd.to_datetime(['20230101', '20230102']))
         df_no_sea_level_2 = pd.DataFrame({'colB': [3, 4]}, index=pd.to_datetime(['20230103', '20230104']))
        
-        with pytest.raises(ValueError, match="Both datasets must contain a 'Sea Level' column."):
-            join_data(df_no_sea_level_1, df_no_sea_level_2)
+         with pytest.raises(ValueError, match="Both datasets for join_data must contain a 'Sea Level' column."):
+          join_data(df_no_sea_level_1, df_no_sea_level_2)
         gauge_files = ['data/1946ABE.txt', 'data/1947ABE.txt']
         data1_valid = read_tidal_data(gauge_files[1]) # 1947 data
         data2_valid = read_tidal_data(gauge_files[0]) # 1946 data
@@ -56,8 +56,9 @@ class TestTidalAnalysis():
         data2_modified_for_test = read_tidal_data(gauge_files[0]) 
         data2_modified_for_test_no_sea_level = data2_modified_for_test.drop(columns=["Sea Level"])
 
-         with pytest.raises(ValueError, match="Both datasets must contain a 'Sea Level' column."):
-            join_data(data1_valid, data2_modified_for_test_no_sea_level)
+        with pytest.raises(ValueError, match="Both datasets for join_data must contain a 'Sea Level' column."):
+         join_data(data1_valid, data2_modified_for_test_no_sea_level)
+        
     
     def test_extract_year(self):
         
