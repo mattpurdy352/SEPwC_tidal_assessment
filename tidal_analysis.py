@@ -97,7 +97,12 @@ def _prepare_tidal_analysis_inputs(
     sea_level_values = data['Sea Level'].values
 
     return time_hours, sea_level_values
-    
+
+def _create_empty_tidal_df() -> pd.DataFrame:
+    """Creates a standard empty DataFrame for tidal data scenarios."""
+    empty_idx = pd.DatetimeIndex([], tz='UTC', name='Time')
+    return pd.DataFrame({'Sea Level': pd.Series(dtype=float)}, index=empty_idx)
+
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
     Reads a tidal data file with a specific metadata header and column structure,
