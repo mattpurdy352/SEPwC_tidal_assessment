@@ -197,6 +197,57 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
     )
     return data_to_process[['Sea Level']]
 
+def extract_single_year_remove_mean(
+    year: [int, str],  
+    data: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Extracts data for a single year and removes the mean sea level.
+    Args:
+        year (int | str): Year to extract (e.g., 1947 or "1947").
+        data (pd.DataFrame): Tidal DataFrame. Expected to have a DatetimeIndex
+                             (ideally named 'Time' and timezone-aware)
+                             and a 'Sea Level' column.
+   Returns:
+        pd.DataFrame: Data subset for the year with mean sea level removed.
+                      Returns a standard empty DataFrame on invalid input or no data.
+    """
+    if not (isinstance(data, pd.DataFrame) and
+            isinstance(data.index, pd.DatetimeIndex) and
+            'Sea Level' in data.columns):
+        warning_message = (
+            "Warning: Invalid input 'data' for extract_single_year_remove_mean. "
+            "Expected DataFrame with DatetimeIndex and 'Sea Level' column."
+        )
+        print(warning_message, file=sys.stderr)
+        return _create_empty_tidal_df()
+
+    if data.empty:
+        return _create_empty_tidal_df()
+
+    try:
+        year_int = int(year)
+    except ValueError as exc:
+        raise ValueError(
+            f"Year argument '{year}' cannot be converted to an integer."
+        ) from exc
+
+    year_data = data[data.index.year == year_int].copy()
+
+    if year_data.empty:
+        return _create_empty_tidal_df()
+
+    if pd.api.types.is_numeric_dtype(year_data['Sea Level']):
+        mean_sea_level = year_data['Sea Level'].mean()
+        if pd.notna(mean_sea_level):
+            year_data['Sea Level'] = year_data['Sea Level'] - mean_sea_level
+    else:
+        print(
+            f"Warning: 'Sea Level' column for year {year_int} is not numeric. "
+            "Mean cannot be calculated or removed.", file=sys.stderr
+        )
+    return year_data
+
 def extract_section_remove_mean(start, end, data):
     year = int(year)
     year_data = data[data.index.year == year].copy()
@@ -204,15 +255,7 @@ def extract_section_remove_mean(start, end, data):
         mean_sea_level = year_data['Sea Level'].mean()
         year_data['Sea Level'] = year_data['Sea Level'] - mean_sea_level
     return year_data 
-
-def extract_section_year_remove_mean(year, data):
-     start_datetime = pd.to_datetime(start, format='%Y%m%d')
-    end_datetime = pd.to_datetime(end, format='%Y%m%d')
-    section_data = data[(data.index >= start_datetime) & (data.index <= end_datetime)].copy()
-    if not section_data.empty:
-        mean_sea_level = section_data['Sea Level'].mean()
-        section_data['Sea Level'] = section_data['Sea Level'] - mean_sea_level
-    return section_data
+    
      
 def join_data(data1, data2):
     if 'Sea Level' not in data1.columns or 'Sea Level' not in data2.columns:
