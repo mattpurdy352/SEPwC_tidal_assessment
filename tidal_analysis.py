@@ -105,96 +105,97 @@ def _create_empty_tidal_df() -> pd.DataFrame:
 
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
-    Reads a tidal data file with a specific metadata header and column structure,
-    returning a DataFrame indexed by UTC datetime, with sea level values as floats.
-
+    Reads a tidal data file with a specific metadata header and column structure.
+    Returns a DataFrame indexed by UTC datetime, with sea level values as floats.
     Args:
         filename (str): Path to the tidal data file.
-
     Returns:
-        pd.DataFrame: A time-indexed DataFrame of sea level values.
-                      Index is UTC timezone-aware. Sea Level column can contain NaNs.
-
+        pd.DataFrame: A time-indexed DataFrame with a 'Sea Level' column.
+                      The index is named 'Time' and is UTC timezone-aware.
+                      The 'Sea Level' column can contain NaNs.
+                      Returns a standard empty DataFrame on failure.
     Raises:
         FileNotFoundError: If the specified file does not exist.
-        pd.errors.EmptyDataError: If the file is empty or becomes empty after skips.
-        ValueError: For other parsing or data conversion issues.
+        ValueError: For critical parsing or data conversion issues not leading
+                    to a gracefully handled empty DataFrame.
     """
+    # pylint: disable=too-many-return-statements, too-many-branches
+    # Multiple returns are used for robust error handling.
     try:
-        # Skip the first 11 lines (9 metadata lines + 2 descriptive column header lines)
-        # The actual data values start after these.
         data = pd.read_csv(
             filename,
             delim_whitespace=True,
-            skiprows=11,  # Crucial for skipping the header block
-            header=None,  # No header row for pandas to infer from the data lines
-            names=['Cycle', 'Date_str', 'Time_str', 'Sea_Level_Raw', 'Residual_Raw'],
-            dtype=str,    # Read all as string initially for robust parsing
+            skiprows=NUM_FILE_HEADER_LINES_TO_SKIP,
+            header=None,
+            names=EXPECTED_RAW_COLUMN_NAMES,
+            dtype=str,
             skip_blank_lines=True
         )
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"The file {filename} was not found.") from exc
-    except pd.errors.EmptyDataError as exc:
-        print(f"Warning: File {filename} is empty or contains no data after skipping header rows.",
-               file=sys.stderr)
-        empty_idx = pd.DatetimeIndex([], tz='UTC')
-        return pd.DataFrame({'Sea Level': pd.Series(dtype=float)}, index=empty_idx)
-    except Exception as exc: # Catch other potential pd.read_csv errors (like ParserError if structure is still off)
-        raise ValueError(f"Error parsing CSV file {filename} after skipping rows: {exc}") from exc
+    except pd.errors.EmptyDataError:
+        warning_message = (
+            f"Warning: File {filename} is empty or contains no data after "
+            f"skipping {NUM_FILE_HEADER_LINES_TO_SKIP} header lines."
+        )
+        print(warning_message, file=sys.stderr)
+        return _create_empty_tidal_df()
+    except (pd.errors.ParserError, Exception) as exc:  # pylint: disable=broad-except
+        # Catching broad Exception as read_csv can raise various C-level errors.
+        raise ValueError(
+            f"Error parsing CSV file {filename} after skipping rows: {exc}"
+        ) from exc
 
     if data.empty:
-        print(f"Warning: No data read from {filename} after initial parsing steps.",
-              file=sys.stderr)
-        empty_idx = pd.DatetimeIndex([], tz='UTC')
-        return pd.DataFrame({'Sea Level': pd.Series(dtype=float)}, index=empty_idx)
-        
-    data_to_process = data.copy()
+        print(
+            f"Warning: No data rows read from {filename} (might be all "
+            "comments/blanks after header skip).", file=sys.stderr
+        )
+        return _create_empty_tidal_df()
 
-    data_to_process = data_to_process.loc[
+    data_to_process = data.copy()
+    # Filter out rows with empty Date_str or Time_str before concatenation.
+    valid_strings_condition = (
         data_to_process['Date_str'].str.strip().ne('') &
         data_to_process['Time_str'].str.strip().ne('')
-    ].copy() 
+    )
+    data_to_process = data_to_process.loc[valid_strings_condition].copy()
 
     if data_to_process.empty:
-        print(f"Warning: No valid date/time entries found in {filename}.", file=sys.stderr)
-        empty_idx = pd.DatetimeIndex([], tz='UTC')
-        return pd.DataFrame({'Sea Level': pd.Series(dtype=float)}, index=empty_idx)
+        print(
+            f"Warning: No valid date/time string entries found in {filename} "
+            "after filtering empty strings.", file=sys.stderr
+        )
+        return _create_empty_tidal_df()
 
-    data_to_process['Timestamp_str'] = data_to_process['Date_str'] + ' ' + data_to_process['Time_str']
-
-    
+    data_to_process['Timestamp_str'] = (
+        data_to_process['Date_str'] + ' ' + data_to_process['Time_str']
+    )
     data_to_process['Time'] = pd.to_datetime(
         data_to_process['Timestamp_str'],
-        format='%Y/%m/%d %H:%M:%S',  # Format from your file sample
-        errors='coerce'             # Invalid date formats become NaT
+        format=DATETIME_FORMAT_STR,
+        errors='coerce'
     )
-
-    # Drop rows where the combined 'Time' could not be parsed (became NaT)
     data_to_process = data_to_process.dropna(subset=['Time'])
 
     if data_to_process.empty:
-        print(f"Warning: All date/time entries in {filename} were unparseable.", file=sys.stderr)
-        empty_idx = pd.DatetimeIndex([], tz='UTC')
-        return pd.DataFrame({'Sea Level': pd.Series(dtype=float)}, index=empty_idx)
+        print(
+            f"Warning: All date/time entries in {filename} were unparseable "
+            "or resulted in NaT.", file=sys.stderr
+        )
+        return _create_empty_tidal_df()
 
     data_to_process = data_to_process.set_index('Time')
-
-    # Localize index to UTC (your tests and other functions expect this)
     if data_to_process.index.tz is None:
         data_to_process = data_to_process.tz_localize('UTC')
-    else: # If already localized (e.g. if source format had timezone)
+    else:
         data_to_process = data_to_process.tz_convert('UTC')
 
-    # Convert 'Sea_Level_Raw' to numeric, coercing errors
     data_to_process['Sea Level'] = pd.to_numeric(
         data_to_process['Sea_Level_Raw'],
-        errors='coerce'  # Invalid sea level values become NaN
+        errors='coerce'
     )
-
-    # The tests expect a DataFrame with a 'Sea Level' column and a DatetimeIndex named 'Time'.
-    # Return only the DatetimeIndex and the 'Sea Level' column.
-    final_data = data_to_process[['Sea Level']]
-    return final_data
+    return data_to_process[['Sea Level']]
 
 def extract_section_remove_mean(start, end, data):
     year = int(year)
