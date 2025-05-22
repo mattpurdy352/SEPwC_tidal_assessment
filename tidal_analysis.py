@@ -11,14 +11,26 @@ import os
 
 def read_tidal_data(filename):
      try:
-        data = pd.read_csv(filename, delim_whitespace=True, header=None, names=['Time', 'Sea Level'])
-        data['Time'] = pd.to_datetime(data['Time'], format='%Y%m%d%H%M', errors='coerce')
-        data.set_index('Time', inplace=True)
-        data['Sea Level'] = pd.to_numeric(data['Sea Level'], errors='coerce')
-        data.dropna(subset=['Sea Level'], inplace=True)
-        return data
-    except FileNotFoundError:
-        raise FileNotFoundError(f"The file {filename} was not found.")
+       data = pd.read_csv(
+           filename,
+           delim_whitespace=True,
+           header=None,
+           names=['Time', 'Sea Level']
+       )
+       data['Time'] = pd.to_datetime(
+           data['Time'],
+           format='%Y%m%d%H%M',
+           errors='coerce'
+       )
+       data.set_index('Time', inplace=True)
+       data['Sea Level'] = pd.to_numeric(
+           data['Sea Level'],
+           errors='coerce'
+       )
+       data.dropna(subset=['Sea Level'], inplace=True)
+       return data
+    except FileNotFoundError as exc:
+       raise FileNotFoundError(f"The file {filename} was not found.") from exc
     
 def extract_section_remove_mean(start, end, data):
     year = int(year)
