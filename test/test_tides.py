@@ -32,27 +32,31 @@ class TestTidalAnalysis():
     
     def test_join_data(self):
 
-        with pytest.raises(ValueError):
-            join_data(data1, data2)
+        df_no_sea_level_1 = pd.DataFrame({'colA': [1, 2]}, index=pd.to_datetime(['20230101', '20230102']))
+        df_no_sea_level_2 = pd.DataFrame({'colB': [3, 4]}, index=pd.to_datetime(['20230103', '20230104']))
+       
+        with pytest.raises(ValueError, match="Both datasets must contain a 'Sea Level' column."):
+            join_data(df_no_sea_level_1, df_no_sea_level_2)
         gauge_files = ['data/1946ABE.txt', 'data/1947ABE.txt']
-
-        data1 = read_tidal_data(gauge_files[1])
-        data2 = read_tidal_data(gauge_files[0])
-        data = join_data(data1, data2)
+        data1_valid = read_tidal_data(gauge_files[1]) # 1947 data
+        data2_valid = read_tidal_data(gauge_files[0]) # 1946 data
+        
+        data = join_data(data1_valid, data2_valid)
 
         assert "Sea Level" in data.columns
-        assert type(data.index) == pd.core.indexes.datetimes.DatetimeIndex
+        assert isinstance(data.index, pd.core.indexes.datetimes.DatetimeIndex)
         assert data['Sea Level'].size == 8760*2
 
         # check sorting (we join 1947 to 1946, but expect 1946 to 1947)
-        assert data.index[0] == pd.Timestamp('1946-01-01 00:00:00')
-        assert data.index[-1] == pd.Timestamp('1947-12-31 23:00:00')
+        assert data.index[0] == pd.Timestamp('1946-01-01 00:00:00', tz='UTC')
+        assert data.index[-1] == pd.Timestamp('1947-12-31 23:00:00', tz='UTC')
 
-        # check you get a fail if two incompatible dfs are given
-        data2.drop(columns=["Sea Level","Time"], inplace=True)
-        data = join_data(data1, data2)
-        
+        data2_modified_for_test = read_tidal_data(gauge_files[0]) 
+        data2_modified_for_test_no_sea_level = data2_modified_for_test.drop(columns=["Sea Level"])
 
+         with pytest.raises(ValueError, match="Both datasets must contain a 'Sea Level' column."):
+            join_data(data1_valid, data2_modified_for_test_no_sea_level)
+    
     def test_extract_year(self):
         
         gauge_files = ['data/1946ABE.txt', 'data/1947ABE.txt']
@@ -82,7 +86,7 @@ class TestTidalAnalysis():
         
         year1946_47 = extract_section_remove_mean("19461215", "19470310", data)
         assert "Sea Level" in year1946_47.columns
-        assert type(year1946_47.index) == pd.core.indexes.datetimes.DatetimeIndex
+        assert isinstance(year1946_47.index, pd.DatetimeIndex)
         assert year1946_47['Sea Level'].size == 2064
 
         mean = np.mean(year1946_47['Sea Level'])
@@ -91,7 +95,7 @@ class TestTidalAnalysis():
 
         data_segment = extract_section_remove_mean("19470115", "19470310", data1)
         assert "Sea Level" in data_segment.columns
-        assert type(data_segment.index) == pd.core.indexes.datetimes.DatetimeIndex
+        assert isinstance(data_segment.index, pd.DatetimeIndex)
         assert data_segment['Sea Level'].size == 1320
 
         mean = np.mean(data_segment['Sea Level'])
