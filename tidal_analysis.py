@@ -41,7 +41,63 @@ def _check_utide_availability() -> None:
             "correctly."
         )
         raise EnvironmentError(error_message)
-        
+
+def _prepare_tidal_analysis_inputs(
+    data: pd.DataFrame,
+    start_datetime_epoch: datetime
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Prepares time (in hours from epoch) and sea level arrays for tidal analysis.
+
+    Handles timezone consistency between the data's DatetimeIndex and the
+    start_datetime_epoch. Assumes data.index is already localized (e.g., to UTC).
+
+    Args:
+        data (pd.DataFrame): Input DataFrame with a DatetimeIndex and
+                             'Sea Level' column.
+        start_datetime_epoch (datetime): The reference datetime (t=0) for the
+                                         analysis. Must be timezone-aware.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]:
+            time_hours (np.ndarray): Time in hours since start_datetime_epoch.
+            sea_level_values (np.ndarray): NumPy array of sea level values.
+
+    Raises:
+        TypeError: If data.index is not a DatetimeIndex.
+        ValueError: If timezone consistency cannot be achieved or data is unsuitable.
+    """
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise TypeError("Input 'data' must have a pandas DatetimeIndex.")
+
+    pd_start_epoch = pd.Timestamp(start_datetime_epoch)
+
+    if data.index.tz is None:
+        raise ValueError(
+            "Data index is timezone-naive; expected UTC aware from read_tidal_data."
+        )
+    if pd_start_epoch.tz is None:
+        raise ValueError("start_datetime_epoch must be timezone-aware.")
+
+    current_epoch_pd_timestamp = pd_start_epoch
+    if data.index.tz != pd_start_epoch.tz:
+        try:
+            current_epoch_pd_timestamp = pd_start_epoch.tz_convert(data.index.tz)
+        except Exception as e_tz_convert:  # pylint: disable=broad-except
+            # Catching broad Exception as tz_convert can raise various errors.
+            error_message = (
+                f"Could not convert start_datetime_epoch timezone "
+                f"from '{pd_start_epoch.tz}' to data.index timezone "
+                f"('{data.index.tz}'): {e_tz_convert}"
+            )
+            raise ValueError(error_message) from e_tz_convert
+
+    time_diff = data.index - current_epoch_pd_timestamp
+    time_hours = time_diff.total_seconds() / SECONDS_PER_HOUR
+    sea_level_values = data['Sea Level'].values
+
+    return time_hours, sea_level_values
+    
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
     Reads a tidal data file with a specific metadata header and column structure,
