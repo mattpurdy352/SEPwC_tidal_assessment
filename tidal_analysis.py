@@ -19,6 +19,14 @@ except ImportError:
 
 SECONDS_PER_HOUR = 3600.0
 MIN_DATAPOINTS_PER_CONSTITUENT = 2 
+NUM_FILE_HEADER_LINES_TO_SKIP: int = 11
+# Expected column names after skipping headers and providing names to read_csv
+EXPECTED_RAW_COLUMN_NAMES: list[str] = [
+    'Cycle', 'Date_str', 'Time_str', 'Sea_Level_Raw', 'Residual_Raw'
+]
+# Datetime format string used for parsing combined date and time
+DATETIME_FORMAT_STR: str = '%Y/%m/%d %H:%M:%S'
+
 
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
