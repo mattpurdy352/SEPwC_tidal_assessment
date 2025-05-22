@@ -338,12 +338,26 @@ def extract_section_remove_mean(
     return section_data
     
      
-def join_data(data1, data2):
+def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
+    """
+    Joins two tidal DataFrames and sorts them by their DatetimeIndex.
+    Args:
+        data1 (pd.DataFrame): First tidal DataFrame.
+        data2 (pd.DataFrame): Second tidal DataFrame.
+    Returns:
+        pd.DataFrame: A new DataFrame with combined and sorted data.
+    Raises:
+        ValueError: If either input is not a DataFrame or lacks 'Sea Level' column.
+    """
+    if not (isinstance(data1, pd.DataFrame) and isinstance(data2, pd.DataFrame)):
+        raise ValueError("Both inputs to join_data must be pandas DataFrames.")
     if 'Sea Level' not in data1.columns or 'Sea Level' not in data2.columns:
-        raise ValueError("Both datasets must contain a 'Sea Level' column.")
+        raise ValueError(
+            "Both datasets for join_data must contain a 'Sea Level' column."
+        )
+
     combined_data = pd.concat([data1, data2])
-    combined_data.sort_index(inplace=True)
-    return combined_data 
+    return combined_data.sort_index()
 
 def sea_level_rise(data):
     time_days = (data.index - data.index[0]).days
