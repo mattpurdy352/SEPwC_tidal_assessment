@@ -27,7 +27,21 @@ EXPECTED_RAW_COLUMN_NAMES: list[str] = [
 # Datetime format string used for parsing combined date and time
 DATETIME_FORMAT_STR: str = '%Y/%m/%d %H:%M:%S'
 
+def _check_utide_availability() -> None:
+    """
+    Checks if the UTide 'solve' and 'reconstruct' functions are available.
 
+    Raises:
+        EnvironmentError: If 'solve' or 'reconstruct' from UTide is not loaded.
+    """
+    if solve is None or reconstruct is None:
+        error_message = (
+            "'utide' library functions ('solve' and/or 'reconstruct') are "
+            "not available. Please ensure utide is installed and imported "
+            "correctly."
+        )
+        raise EnvironmentError(error_message)
+        
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
     Reads a tidal data file with a specific metadata header and column structure,
