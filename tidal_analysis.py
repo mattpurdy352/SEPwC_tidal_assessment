@@ -248,13 +248,94 @@ def extract_single_year_remove_mean(
         )
     return year_data
 
-def extract_section_remove_mean(start, end, data):
-    year = int(year)
-    year_data = data[data.index.year == year].copy()
-    if not year_data.empty:
-        mean_sea_level = year_data['Sea Level'].mean()
-        year_data['Sea Level'] = year_data['Sea Level'] - mean_sea_level
-    return year_data 
+def extract_section_remove_mean(
+    start_date_str: str,
+    end_date_str: str,
+    data: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Extracts data between start and end dates (inclusive) and removes the
+    mean sea level from the 'Sea Level' column.
+
+    Args:
+        start_date_str (str): Start date in 'YYYYMMDD' format.
+        end_date_str (str): End date in 'YYYYMMDD' format.
+        data (pd.DataFrame): Input tidal DataFrame. Expected to have:
+                             - A pandas DatetimeIndex (ideally named 'Time' and
+                               timezone-aware, e.g., UTC).
+                             - A 'Sea Level' column containing numeric data.
+
+    Returns:
+        pd.DataFrame: A DataFrame subset for the period with mean sea level removed.
+                      Returns a standard empty DataFrame on invalid input or no data.
+    """
+    if not (isinstance(data, pd.DataFrame) and
+            isinstance(data.index, pd.DatetimeIndex) and
+            'Sea Level' in data.columns):
+        warning_message = (
+            "Warning: Invalid input 'data' for extract_section_remove_mean. "
+            "Expected DataFrame with DatetimeIndex and 'Sea Level' column."
+        )
+        print(warning_message, file=sys.stderr)
+        return _create_empty_tidal_df()
+
+    if data.empty:
+        return _create_empty_tidal_df()
+
+    try:
+        start_dt_naive = pd.to_datetime(start_date_str, format='%Y%m%d')
+        end_dt_naive = pd.to_datetime(end_date_str, format='%Y%m%d').replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"Start date '{start_date_str}' or end date '{end_date_str}' "
+            "is not in the correct 'YYYYMMDD' format."
+        ) from exc
+
+    if data.index.tz is not None:
+        try:
+            start_dt_aware = start_dt_naive.tz_localize(data.index.tz)
+            end_dt_aware = end_dt_naive.tz_localize(data.index.tz)
+        except (pytz.exceptions.NonExistentTimeError,
+                pytz.exceptions.AmbiguousTimeError) as tz_err:
+            warning_msg = (
+                f"Warning: Timezone localization issue for start/end dates: {tz_err}. "
+                "Using UTC as fallback and converting to data's timezone."
+            )
+            print(warning_msg, file=sys.stderr)
+            start_dt_aware = start_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
+            end_dt_aware = end_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
+    elif (start_dt_naive.tzinfo is not None or end_dt_naive.tzinfo is not None):
+        raise ValueError(
+            "Timezone inconsistency: data.index is naive but parsed start/end dates "
+            "are (or became) aware."
+        )
+    if data.index.tz is None and start_dt_aware.tzinfo is None: # Defensive check for warning
+         print("Warning: Performing naive datetime comparison in "
+               "extract_section_remove_mean as data.index is naive. "
+               "Ensure data from read_tidal_data is UTC aware.", file=sys.stderr)
+
+
+    section_data = data[
+        (data.index >= start_dt_aware) & (data.index <= end_dt_aware)
+    ].copy()
+
+    if section_data.empty:
+        return _create_empty_tidal_df()
+
+    if pd.api.types.is_numeric_dtype(section_data['Sea Level']):
+        mean_sea_level = section_data['Sea Level'].mean()
+        if pd.notna(mean_sea_level):
+            section_data['Sea Level'] = section_data['Sea Level'] - mean_sea_level
+    else:
+        warning_message = (
+            f"Warning: 'Sea Level' column in the extracted section "
+            f"({start_date_str}-{end_date_str}) is not numeric. Mean not removed."
+        )
+        print(warning_message, file=sys.stderr)
+
+    return section_data
     
      
 def join_data(data1, data2):
