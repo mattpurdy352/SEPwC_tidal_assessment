@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 import argparse
-import pandas as pd 
-import numpy as np
-from utide import solve, reconstruct
-from datetime import datetime
-import pytz
-import matplotlib.pyplot as plt
-from scipy.stats import linregress
 import os
+from datetime import datetime # datetime class from datetime module
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pytz
+from scipy.stats import linregress
+
+try:
+    from utide import solve, reconstruct
+except ImportError:
+    # Fallback if utide is not installed, to allow basic script structure/import
+    # Tests requiring utide will fail, which is expected in this scenario.
+    print("Warning: 'utide' library not found. "
+          "Functions 'solve' and 'reconstruct' will not be available.")
+    solve = None
+    reconstruct = None
+
+# Define constants for clarity and maintainability
+SECONDS_PER_HOUR = 3600.0
+MIN_DATAPOINTS_PER_CONSTITUENT = 2 
 
 def read_tidal_data(filename):
      try:
