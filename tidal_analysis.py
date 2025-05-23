@@ -433,25 +433,90 @@ def _load_and_combine_data_from_directory(directory_path: str, is_verbose: bool)
 
         return combined_df.sort_index()
 
-def tidal_analysis(data, constituents, start_datetime):
-   if data.empty:
+def tidal_analysis(
+    data: pd.DataFrame,
+    constituents: list[str],
+    start_datetime_epoch: datetime,
+    latitude: float = 57.14325
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Performs tidal harmonic analysis using UTide to get amplitudes and phases.
+    Assumes _prepare_tidal_analysis_inputs returns time in DAYS.
+    """
+    _check_utide_availability()
+    if data.empty:
         return np.array([]), np.array([])
-    time_hours = (data.index - start_datetime).total_seconds() / 3600.0
-    y = data['Sea Level'].values
-    valid = ~np.isnan(y)
-    coef = solve(time_hours[valid], y[valid], constit=constituents, method='ols', nodal=False, trend=False)
-    amps = []
-    phases = []
-    for c in constituents:
+
+    time_in_days, sea_level_values = _prepare_tidal_analysis_inputs(
+        data, start_datetime_epoch
+    )
+
+    valid_mask = ~np.isnan(sea_level_values)
+    time_in_days_valid = time_in_days[valid_mask]
+    sea_level_values_valid = sea_level_values[valid_mask]
+
+    min_points_needed = len(constituents) * MIN_DATAPOINTS_PER_CONSTITUENT
+    if len(sea_level_values_valid) < min_points_needed:
+        warning_message = (
+            f"Warning: Insufficient valid data points ({len(sea_level_values_valid)}) "
+            f"for tidal analysis with {len(constituents)} constituents. "
+            f"Need at least {min_points_needed}. Returning NaNs."
+        )
+        print(warning_message, file=sys.stderr)
+        nan_array = np.full(len(constituents), np.nan)
+        return nan_array, nan_array
+    
+    try:
+        coef = solve(
+            time_in_days_valid,
+            sea_level_values_valid,
+            constit=constituents,
+            lat=latitude,
+            epoch=start_datetime_epoch,
+            method='ols',
+            nodal=True,
+            trend=True
+        )
+    except Exception as e_solve:
+        print(f"Error during utide.solve: {e_solve}", file=sys.stderr)
+        nan_array = np.full(len(constituents), np.nan)
+        return nan_array, nan_array
+    amplitudes = np.full(len(constituents), np.nan)
+    phases = np.full(len(constituents), np.nan)
+
+    coef_names = getattr(coef, 'name', [])
+    coef_amplitude = getattr(coef, 'A', [])
+    coef_phase = getattr(coef, 'g', [])
+
+    try:
+        coef_names_str = [
+            n.decode() if isinstance(n, bytes) else str(n).upper() for n in coef_names
+        ]
+    except (TypeError, AttributeError):
+        coef_names_str = []
+
+    for i, const_name in enumerate(constituents):
         try:
-            i = coef.name.index(c)
-            amps.append(coef.A[i])
-            phases.append(coef.g[i])
-        except ValueError:
-            print(f"Warning: Constituent '{c}' not found in the solution.")
-            amps.append(np.nan)  
-            phases.append(np.nan)
-    return np.array(amps), np.array(phases)
+            upper_const_name = const_name.upper()
+            if not coef_names_str:
+                raise ValueError("Coefficient names not available from UTide solution.")
+            
+            idx = coef_names_str.index(upper_const_name)
+
+            if idx < len(coef_amplitude) and idx < len(coef_phase):
+                amplitudes[i] = coef_amplitude[idx]
+                phases[i] = coef_phase[idx]
+            else:
+                print(f"Warning: Index mismatch for constituent '{const_name}' "
+                      "in UTide coef object.", file=sys.stderr)
+        except (ValueError, AttributeError, TypeError):
+            warning_message = (
+                f"Warning: Constituent '{const_name}' problem: Not found in UTide solution, "
+                "index issue, or coefficient object attribute missing/malformed."
+            )
+            print(warning_message, file=sys.stderr)
+
+    return amplitudes, phases
 
 def get_longest_contiguous_data(data):
     time_diff = data.index.to_series().diff()
