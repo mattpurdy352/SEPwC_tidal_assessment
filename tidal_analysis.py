@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytz
 from scipy.stats import linregress
+from typing import Optional
 
 try:
     from utide import solve, reconstruct
