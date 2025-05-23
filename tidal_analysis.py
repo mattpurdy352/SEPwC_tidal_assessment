@@ -397,7 +397,42 @@ def sea_level_rise(data: pd.DataFrame, interpolation_limit: Optional[int] = None
 
     result = linregress(time_in_days, sea_level_values)
     return result.slope, result.pvalue
-       
+
+def _load_and_combine_data_from_directory(directory_path: str, is_verbose: bool) -> pd.DataFrame | None:
+    """
+    Loads all .txt files from a directory, combines them, and sorts by time.
+    """
+    if is_verbose:
+        print(f"Scanning directory for data files: {directory_path}")
+
+    all_data_frames = []
+    try:
+        for entry_name in sorted(os.listdir(directory_path)): # Sort for consistent order
+            if entry_name.lower().endswith(".txt"): # Process .txt files
+                file_path = os.path.join(directory_path, entry_name)
+                if is_verbose:
+                    print(f"  Reading data file: {file_path}")
+                try:
+                    df = read_tidal_data(file_path)
+                    if not df.empty:
+                        all_data_frames.append(df)
+                    elif is_verbose:
+                        print(f"  Warning: No data returned from {file_path}")
+                except (FileNotFoundError, pd.errors.ParserError, ValueError) as e_file:
+                    print(f"  Error reading or parsing file {file_path}: {e_file}", file=sys.stderr)
+                    continue
+        
+        if not all_data_frames:
+            print(f"Warning: No valid data files found or processed in directory {directory_path}", file=sys.stderr)
+            return _create_empty_tidal_df()
+
+        combined_df = pd.concat(all_data_frames)
+        if combined_df.empty:
+             print(f"Warning: Combined data is empty after processing all files in {directory_path}", file=sys.stderr)
+             return _create_empty_tidal_df()
+
+        return combined_df.sort_index()
+
 def tidal_analysis(data, constituents, start_datetime):
    if data.empty:
         return np.array([]), np.array([])
