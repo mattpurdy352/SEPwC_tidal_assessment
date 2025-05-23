@@ -20,7 +20,6 @@ except ImportError:
 SECONDS_PER_HOUR = 3600.0
 MIN_DATAPOINTS_PER_CONSTITUENT = 2 
 NUM_FILE_HEADER_LINES_TO_SKIP: int = 11
-# Expected column names after skipping headers and providing names to read_csv
 EXPECTED_RAW_COLUMN_NAMES: list[str] = [
     'Cycle', 'Date_str', 'Time_str', 'Sea_Level_Raw', 'Residual_Raw'
 ]
@@ -28,12 +27,6 @@ EXPECTED_RAW_COLUMN_NAMES: list[str] = [
 DATETIME_FORMAT_STR: str = '%Y/%m/%d %H:%M:%S'
 
 def _check_utide_availability() -> None:
-    """
-    Checks if the UTide 'solve' and 'reconstruct' functions are available.
-
-    Raises:
-        EnvironmentError: If 'solve' or 'reconstruct' from UTide is not loaded.
-    """
     if solve is None or reconstruct is None:
         error_message = (
             "'utide' library functions ('solve' and/or 'reconstruct') are "
@@ -83,8 +76,7 @@ def _prepare_tidal_analysis_inputs(
     if data.index.tz != pd_start_epoch.tz:
         try:
             current_epoch_pd_timestamp = pd_start_epoch.tz_convert(data.index.tz)
-        except Exception as e_tz_convert:  # pylint: disable=broad-except
-            # Catching broad Exception as tz_convert can raise various errors.
+        except Exception as e_tz_convert:
             error_message = (
                 f"Could not convert start_datetime_epoch timezone "
                 f"from '{pd_start_epoch.tz}' to data.index timezone "
@@ -119,8 +111,6 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         ValueError: For critical parsing or data conversion issues not leading
                     to a gracefully handled empty DataFrame.
     """
-    # pylint: disable=too-many-return-statements, too-many-branches
-    # Multiple returns are used for robust error handling.
     try:
         data = pd.read_csv(
             filename,
