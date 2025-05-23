@@ -464,4 +464,184 @@ def main():
 
     args = parser.parse_args()
 
+    all_data = pd.DataFrame()
+    if os.path.isdir(args.data_path):
+        data_files = [os.path.join(args.data_path, f) for f in os.listdir(args.data_path) if f.endswith('.txt')]
+        if not data_files:
+            print(f"Error: No .txt files found in directory '{args.data_path}'.", file=sys.stderr)
+            sys.exit(1)
+        
+        # Read and join all data files in the directory
+        for i, f in enumerate(data_files):
+            try:
+                current_data = read_tidal_data(f)
+                if current_data.empty:
+                    print(f"Warning: No valid data loaded from {f}. Skipping.", file=sys.stderr)
+                    continue
+                if all_data.empty:
+                    all_data = current_data
+                else:
+                    all_data = join_data(all_data, current_data)
+                if args.verbose:
+                    print(f"Loaded and joined data from {f}.")
+            except (FileNotFoundError, ValueError) as e:
+                print(f"Error processing file {f}: {e}", file=sys.stderr)
+                continue
+    elif os.path.isfile(args.data_path) and args.data_path.endswith('.txt'):
+        try:
+            all_data = read_tidal_data(args.data_path)
+            if args.verbose:
+                print(f"Loaded data from single file {args.data_path}.")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error loading file {args.data_path}: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print(f"Error: Invalid data_path '{args.data_path}'. Must be a .txt file or a directory.", file=sys.stderr)
+        sys.exit(1)
 
+    if all_data.empty:
+        print("Error: No valid data loaded for analysis. Exiting.", file=sys.stderr)
+        sys.exit(1)
+    
+    # Get longest contiguous block of data
+    processed_data = get_longest_contiguous_data(all_data)
+    if processed_data.empty:
+        print("Error: No contiguous valid sea level data found after initial loading. Exiting.", file=sys.stderr)
+        sys.exit(1)
+    
+    # --- Date Sectioning ---
+    if args.start_date or args.end_date:
+        if args.start_date and args.end_date:
+            try:
+                processed_data = extract_section_remove_mean(args.start_date, args.end_date, processed_data)
+                if processed_data.empty:
+                    print(f"Warning: No data found for the specified period {args.start_date}-{args.end_date}.", file=sys.stderr)
+            except ValueError as e:
+                print(f"Error with date range: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print("Error: Both --start-date and --end-date must be provided if one is used.", file=sys.stderr)
+            sys.exit(1)
+
+    if processed_data.empty:
+        print("Error: No data available after applying date filters. Exiting.", file=sys.stderr)
+        sys.exit(1)
+
+    if args.verbose:
+        print(f"Data for analysis spans from {processed_data.index.min()} to {processed_data.index.max()}.")
+        print(f"Number of data points: {len(processed_data)}")
+
+
+    tz = pytz.timezone("UTC") 
+    start_epoch = processed_data.index.min().to_pydatetime().astimezone(tz)
+    time_hours, sea_level_values = _prepare_tidal_analysis_inputs(
+        processed_data, start_epoch
+    )
+
+    # --- Tidal Analysis ---
+    if args.verbose:
+        print(f"Performing tidal analysis with constituents: {', '.join(args.constituents)}")
+        print(f"Using analysis epoch: {start_epoch}")
+        print(f"Using latitude: {args.latitude}")
+
+    amplitudes, phases = np.full(len(args.constituents), np.nan), np.full(len(args.constituents), np.nan) # Initialize with NaNs
+    try:
+        # Pass processed_data to tidal_analysis, as it handles the masking internally
+        amplitudes, phases = tidal_analysis(
+            processed_data,
+            args.constituents,
+            start_epoch,
+            args.latitude
+        )
+        if args.verbose:
+            print("\nTidal Analysis Results:")
+            for i, const in enumerate(args.constituents):
+                print(f"  {const}: Amplitude={amplitudes[i]:.4f}, Phase={phases[i]:.4f}")
+    except EnvironmentError as e: # Catch utide not available error
+        print(f"Error: {e}", file=sys.stderr)
+        print("Tidal analysis skipped.", file=sys.stderr)
+    except Exception as e:
+        print(f"An unexpected error occurred during tidal analysis: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+    # --- Sea Level Rise Regression ---
+    if args.regression:
+        if args.verbose:
+            print("\nCalculating sea level rise trend...")
+        slope, p_value = sea_level_rise(processed_data)
+        if not np.isnan(slope) and not np.isnan(p_value):
+            print(f"\nSea Level Rise (mm/year): {slope * 365.25:.4f}") # Slope is per day, convert to mm/year
+            print(f"Regression p-value: {p_value:.4f}")
+        else:
+            print("Could not calculate sea level rise: insufficient valid data points.")
+
+    # --- Plotting ---
+    if args.plot:
+        _check_utide_availability() # Check again before plotting reconstruction
+        if solve is not None and reconstruct is not None:
+            if args.verbose:
+                print("\nReconstructing and plotting tide...")
+
+            # Reconstruct using the coefficients from the analysis
+            if not np.all(np.isnan(amplitudes)) and not np.all(np.isnan(phases)):
+                try:
+                    
+                    valid_mask_for_solve = ~np.isnan(sea_level_values)
+                    time_hours_valid_for_solve = time_hours[valid_mask_for_solve]
+                    sea_level_values_valid_for_solve = sea_level_values[valid_mask_for_solve]
+
+                    full_coef = None
+                    try:
+                        full_coef = solve(
+                            time_hours_valid_for_solve, sea_level_values_valid_for_solve,
+                            constit=args.constituents,
+                            lat=args.latitude,
+                            method='ols',
+                            nodal=True,
+                            trend=True
+                        )
+                    except Exception as e:
+                        print(f"Warning: Could not get full coefficient object for plotting (re-solve failed): {e}", file=sys.stderr)
+                        full_coef = None # Ensure it's None if error
+
+                    if full_coef is not None:
+                        tide_reconstructed = reconstruct(
+                            time_hours, # Use the full time array for reconstruction over the entire period
+                            coef=full_coef # Pass the full coefficient object
+                        )
+                        reconstructed_tide_values = tide_reconstructed['h']
+
+                        # Plotting
+                        plt.figure(figsize=(12, 6))
+                        plt.plot(processed_data.index.values, processed_data['Sea Level'].values,
+                                 label='Observed Sea Level', color='blue', linewidth=1)
+                        plt.plot(processed_data.index.values, reconstructed_tide_values,
+                                 label='Reconstructed Tide', color='red', linestyle='--', linewidth=1)
+                        
+                        # Calculate and plot residuals
+                        residuals = processed_data['Sea Level'].values - reconstructed_tide_values
+                        plt.plot(processed_data.index.values, residuals,
+                                 label='Residuals', color='green', linestyle=':', linewidth=0.8)
+
+
+                        plt.title('Observed, Reconstructed Tide and Residuals')
+                        plt.xlabel('Time (UTC)')
+                        plt.ylabel('Sea Level (m)') # Assuming unit is meters
+                        plt.legend()
+                        plt.grid(True)
+                        plt.tight_layout()
+                        plt.show()
+                    else:
+                        print("Skipping plot: Unable to obtain full coefficient object for reconstruction.", file=sys.stderr)
+
+                except Exception as e_reconstruct: # pylint: disable=broad-except
+                    print(f"Error during tide reconstruction or plotting: {e_reconstruct}", file=sys.stderr)
+            else:
+                print("Skipping plot: Tidal analysis coefficients are all NaNs.", file=sys.stderr)
+        else:
+            print("Skipping plot: UTide 'solve' or 'reconstruct' not available.", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
