@@ -361,10 +361,42 @@ def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
     combined_data = pd.concat([data1, data2])
     return combined_data.sort_index()
 
-def sea_level_rise(data):
-    time_days = (data.index - data.index[0]).days
-    slope, intercept, r_value, p_value, std_err = linregress(time_days, data['Sea Level'])
-    return slope, p_value
+def sea_level_rise(data: pd.DataFrame, interpolation_limit: Optional[int] = None) -> tuple[float, float]:
+    """
+    Calculates the linear regression slope (trend) and p-value for sea level data.
+    Assumes 'data' comes from the improved read_tidal_data.
+    Allows for limited interpolation of remaining NaNs.
+    If interpolation_limit is None, NaNs are dropped.
+    If interpolation_limit is an int, NaNs are interpolated up to that limit.
+    """
+    if not (isinstance(data, pd.DataFrame) and
+            isinstance(data.index, pd.DatetimeIndex) and
+            'Sea Level' in data.columns):
+        return np.nan, np.nan
+
+    data_processed = data.copy()
+
+    if data_processed['Sea Level'].isna().sum() > 0:
+        if interpolation_limit is not None and interpolation_limit > 0:
+            data_processed['Sea Level'] = data_processed['Sea Level'].interpolate(
+                method='linear',
+                limit_direction='both',
+                limit=interpolation_limit
+            )
+        data_processed = data_processed.dropna(subset=['Sea Level'])
+
+    clean_data = data_processed
+
+    if clean_data.empty or len(clean_data) < 2:
+        return np.nan, np.nan
+
+    # Convert time to days relative to first timestamp
+    time_in_days = (clean_data.index - clean_data.index[0]).total_seconds() / (SECONDS_PER_HOUR * 24.0)
+    time_in_days = time_in_days.to_numpy()
+    sea_level_values = clean_data['Sea Level'].values
+
+    result = linregress(time_in_days, sea_level_values)
+    return result.slope, result.pvalue
        
 def tidal_analysis(data, constituents, start_datetime):
    if data.empty:
