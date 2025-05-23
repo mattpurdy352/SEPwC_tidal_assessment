@@ -187,6 +187,6 @@ class TestRegression():
     def test_dover_regression(self):
 
         from subprocess import run
-        result = run(["python","tidal_analysis.py","data/dover"], capture_output=True, check=True)
+        result = run(["python","tidal_analysis.py","-v","data/dover"], capture_output=True, check=True)
         assert len(result.stdout) > 25
 
