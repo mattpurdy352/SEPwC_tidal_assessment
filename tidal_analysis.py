@@ -406,37 +406,62 @@ def plot_tide_fit(data, reconstructed, title="Tide Fit"):
     plt.tight_layout()
     plt.show()
 
-if __name__ == '__main__':
+def main():
+    """
+    Main function to parse arguments and run tidal analysis.
+    """
     parser = argparse.ArgumentParser(
-        prog="UK Tidal analysis",
-        description="Calculate tidal constituents and RSL from tide gauge data",
-        epilog="Copyright 2024, Jon Hill"
+        description="Perform tidal analysis on sea level data."
     )
 
-    parser.add_argument("directory", help="the directory containing txt files with data")
-    parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Print progress")
-    parser.add_argument('--plot', action='store_true', default=False, help="Plot tidal reconstruction")
+    parser.add_argument(
+        "data_path",
+        type=str,
+        help="Path to the directory containing tide gauge data files (e.g., 'data/aberdeen') "
+             "or a single data file (e.g., 'data/1946ABE.txt'). "
+             "If a directory, all .txt files will be processed."
+    )
+    parser.add_argument(
+        "--constituents",
+        nargs='+',
+        default=['M2', 'S2', 'K1', 'O1'], # Common default constituents
+        help="List of tidal constituents to analyze (e.g., M2 S2 K1 O1)."
+    )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        help="Start date for data extraction (YYYYMMDD). If not provided, the earliest "
+             "possible date from the data will be used."
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        help="End date for data extraction (YYYYMMDD). If not provided, the latest "
+             "possible date from the data will be used."
+    )
+    parser.add_argument(
+        "--latitude",
+        type=float,
+        default=54.0, # Default to a generic UK latitude, but encourage user to specify
+        help="Latitude of the observation site in decimal degrees (e.g., 57.14 for Aberdeen). "
+             "Used for tidal analysis."
+    )
+    parser.add_argument(
+        "-p", "--plot",
+        action="store_true",
+        help="Generate and display a plot of observed vs. reconstructed tide."
+    )
+    parser.add_argument(
+        "-r", "--regression",
+        action="store_true",
+        help="Calculate and print the sea level rise trend and p-value."
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose output for more details during execution."
+    )
 
     args = parser.parse_args()
-    dirname = args.directory
-    verbose = args.verbose
-    do_plot = args.plot
-
-    if verbose:
-        print(f"Processing directory: {dirname}")
-
-    # Example: Use Aberdeen 1946–1947 data for plotting
-    gauge_files = [f"{dirname}/1946ABE.txt", f"{dirname}/1947ABE.txt"]
-    data1 = read_tidal_data(gauge_files[0])
-    data2 = read_tidal_data(gauge_files[1])
-    data = join_data(data1, data2)
-
-    section = extract_section_remove_mean("19460115", "19470310", data)
-    start_dt = datetime(1946, 1, 15, 0, 0, 0, tzinfo=pytz.UTC)
-
-    if do_plot:
-        reconstructed, coef = reconstruct_tide(section, ['M2', 'S2'], start_dt)
-        plot_tide_fit(section, reconstructed, title="Harmonic Tidal Fit")
-    
 
 
