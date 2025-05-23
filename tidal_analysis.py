@@ -98,19 +98,8 @@ def _create_empty_tidal_df() -> pd.DataFrame:
 
 def read_tidal_data(filename: str) -> pd.DataFrame:
     """
-    Reads a tidal data file with a specific metadata header and column structure.
-    Returns a DataFrame indexed by UTC datetime, with sea level values as floats.
-    Args:
-        filename (str): Path to the tidal data file.
-    Returns:
-        pd.DataFrame: A time-indexed DataFrame with a 'Sea Level' column.
-                      The index is named 'Time' and is UTC timezone-aware.
-                      The 'Sea Level' column can contain NaNs.
-                      Returns a standard empty DataFrame on failure.
-    Raises:
-        FileNotFoundError: If the specified file does not exist.
-        ValueError: For critical parsing or data conversion issues not leading
-                    to a gracefully handled empty DataFrame.
+    Reads a tidal data file with specific metadata header and column structure.
+    Custom parsing for 'Sea_Level_Raw' to handle 'M' suffix and '-99.0000N'.
     """
     try:
         data = pd.read_csv(
@@ -131,8 +120,7 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         )
         print(warning_message, file=sys.stderr)
         return _create_empty_tidal_df()
-    except (pd.errors.ParserError, Exception) as exc:  # pylint: disable=broad-except
-        # Catching broad Exception as read_csv can raise various C-level errors.
+    except Exception as exc:
         raise ValueError(
             f"Error parsing CSV file {filename} after skipping rows: {exc}"
         ) from exc
@@ -144,8 +132,8 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         )
         return _create_empty_tidal_df()
 
+
     data_to_process = data.copy()
-    # Filter out rows with empty Date_str or Time_str before concatenation.
     valid_strings_condition = (
         data_to_process['Date_str'].str.strip().ne('') &
         data_to_process['Time_str'].str.strip().ne('')
@@ -159,6 +147,7 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         )
         return _create_empty_tidal_df()
 
+
     data_to_process['Timestamp_str'] = (
         data_to_process['Date_str'] + ' ' + data_to_process['Time_str']
     )
@@ -167,8 +156,18 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         format=DATETIME_FORMAT_STR,
         errors='coerce'
     )
+    original_row_count = len(data_to_process)
     data_to_process = data_to_process.dropna(subset=['Time'])
+    dropped_for_time = original_row_count - len(data_to_process)
+    if dropped_for_time > 0:
+         print(f"DEBUG read_tidal_data({filename}): Dropped {dropped_for_time} rows due to unparseable timestamps.")
 
+    data_to_process['Sea Level'] = pd.to_numeric(
+    data_to_process['Sea_Level_Raw'],
+    errors='coerce'
+)
+    nans_in_file = data_to_process['Sea Level'].isna().sum()
+    print(f"DEBUG read_tidal_data({filename}): NaNs in 'Sea Level' after simple errors='coerce': {nans_in_file}")
     if data_to_process.empty:
         print(
             f"Warning: All date/time entries in {filename} were unparseable "
@@ -176,16 +175,28 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         )
         return _create_empty_tidal_df()
 
+    def custom_parse_sea_level(value_str):
+        if not isinstance(value_str, str): # Should be string due to dtype=str in read_csv
+            value_str = str(value_str) # Coerce just in case
+
+        s = value_str.strip()
+        if s == '-99.0000N' or s == '-99.000N' or s == '-99N' or s == '-99.0N' or s == '-99.':
+            return np.nan
+        if s.upper().endswith('M'):
+            return pd.to_numeric(s[:-1], errors='coerce')
+        return pd.to_numeric(s, errors='coerce')
+
+    data_to_process['Sea Level'] = data_to_process['Sea_Level_Raw'].apply(custom_parse_sea_level)
+    
+    nans_after_custom_parse = data_to_process['Sea Level'].isna().sum()
+    print(f"DEBUG read_tidal_data({filename}): NaNs in 'Sea Level' after custom parsing: {nans_after_custom_parse}")
+
     data_to_process = data_to_process.set_index('Time')
     if data_to_process.index.tz is None:
         data_to_process = data_to_process.tz_localize('UTC')
     else:
         data_to_process = data_to_process.tz_convert('UTC')
 
-    data_to_process['Sea Level'] = pd.to_numeric(
-        data_to_process['Sea_Level_Raw'],
-        errors='coerce'
-    )
     return data_to_process[['Sea Level']]
 
 def extract_single_year_remove_mean(
