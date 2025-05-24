@@ -527,29 +527,6 @@ def get_longest_contiguous_data(data):
     longest_segment_id = segment_ids.value_counts().idxmax()
     return data[segment_ids == longest_segment_id]
 
-def reconstruct_tide(data, constituents, start_datetime):
-    time_hours = (data.index - start_datetime).total_seconds() / 3600.0
-    y = data['Sea Level'].values
-    
-    coef = solve(time_hours, y, constit=constituents, method='ols', nodal=False, trend=False, Rayleigh_min=0.95)
-    tide = reconstruct(time_hours, coef)
-    return tide.h, coef
-
-def plot_tide_fit(data, reconstructed, title="Tide Fit"):
-    plt.figure(figsize=(15, 6))
-
-    plt.plot(data.index, data['Sea Level'], label='Observed', color='black', linewidth=1)
-    plt.plot(data.index, reconstructed, label='Reconstructed', color='blue', linestyle='--', linewidth=1)
-    plt.plot(data.index, data['Sea Level'] - reconstructed, label='Residual', color='red', alpha=0.6)
-
-    plt.xlabel("Time")
-    plt.ylabel("Sea Level (m)")
-    plt.title(title)
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
 def main():
     """
     Main function to parse arguments and run tidal analysis.
@@ -719,73 +696,6 @@ def main():
             print(f"Regression p-value: {p_value:.4f}")
         else:
             print("Could not calculate sea level rise: insufficient valid data points.")
-
-    # --- Plotting ---
-    if args.plot:
-        _check_utide_availability() # Check again before plotting reconstruction
-        if solve is not None and reconstruct is not None:
-            if args.verbose:
-                print("\nReconstructing and plotting tide...")
-
-            # Reconstruct using the coefficients from the analysis
-            if not np.all(np.isnan(amplitudes)) and not np.all(np.isnan(phases)):
-                try:
-                    
-                    valid_mask_for_solve = ~np.isnan(sea_level_values)
-                    time_hours_valid_for_solve = time_hours[valid_mask_for_solve]
-                    sea_level_values_valid_for_solve = sea_level_values[valid_mask_for_solve]
-
-                    full_coef = None
-                    try:
-                        full_coef = solve(
-                            time_hours_valid_for_solve, sea_level_values_valid_for_solve,
-                            constit=args.constituents,
-                            lat=args.latitude,
-                            method='ols',
-                            nodal=True,
-                            trend=True
-                        )
-                    except Exception as e:
-                        print(f"Warning: Could not get full coefficient object for plotting (re-solve failed): {e}", file=sys.stderr)
-                        full_coef = None # Ensure it's None if error
-
-                    if full_coef is not None:
-                        tide_reconstructed = reconstruct(
-                            time_hours, # Use the full time array for reconstruction over the entire period
-                            coef=full_coef # Pass the full coefficient object
-                        )
-                        reconstructed_tide_values = tide_reconstructed['h']
-
-                        # Plotting
-                        plt.figure(figsize=(12, 6))
-                        plt.plot(processed_data.index.values, processed_data['Sea Level'].values,
-                                 label='Observed Sea Level', color='blue', linewidth=1)
-                        plt.plot(processed_data.index.values, reconstructed_tide_values,
-                                 label='Reconstructed Tide', color='red', linestyle='--', linewidth=1)
-                        
-                        # Calculate and plot residuals
-                        residuals = processed_data['Sea Level'].values - reconstructed_tide_values
-                        plt.plot(processed_data.index.values, residuals,
-                                 label='Residuals', color='green', linestyle=':', linewidth=0.8)
-
-
-                        plt.title('Observed, Reconstructed Tide and Residuals')
-                        plt.xlabel('Time (UTC)')
-                        plt.ylabel('Sea Level (m)') # Assuming unit is meters
-                        plt.legend()
-                        plt.grid(True)
-                        plt.tight_layout()
-                        plt.show()
-                    else:
-                        print("Skipping plot: Unable to obtain full coefficient object for reconstruction.", file=sys.stderr)
-
-                except Exception as e_reconstruct: # pylint: disable=broad-except
-                    print(f"Error during tide reconstruction or plotting: {e_reconstruct}", file=sys.stderr)
-            else:
-                print("Skipping plot: Tidal analysis coefficients are all NaNs.", file=sys.stderr)
-        else:
-            print("Skipping plot: UTide 'solve' or 'reconstruct' not available.", file=sys.stderr)
-
 
 if __name__ == "__main__":
     main()
