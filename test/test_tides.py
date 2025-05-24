@@ -13,6 +13,26 @@ import pytz
 
 class TestTidalAnalysis():
     
+    def test_utide_is_available(self, monkeypatch):
+        """
+        Tests that _check_utide_availability does NOT raise an error
+        if utide.solve and utide.reconstruct are mocked as available at the module level.
+        """
+        def mock_solve_function(*args, **kwargs):
+            pass # Dummy function
+        
+        def mock_reconstruct_function(*args, **kwargs):
+            pass # Dummy function
+
+        # Patch the 'solve' and 'reconstruct' attributes of the imported module
+        monkeypatch.setattr(tidal_analysis_module, 'solve', mock_solve_function)
+        monkeypatch.setattr(tidal_analysis_module, 'reconstruct', mock_reconstruct_function)
+
+        try:
+            tidal_analysis_module._check_utide_availability() # Call using the module alias
+        except EnvironmentError:
+            pytest.fail("EnvironmentError was raised even though utide components were mocked as available.")
+    
     def test_reading_data(self):
         tidal_file = "data/1947ABE.txt"
         
