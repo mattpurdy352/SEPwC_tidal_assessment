@@ -374,7 +374,8 @@ def sea_level_rise(data: pd.DataFrame, interpolation_limit: int = None) -> tuple
 
     # Interpolate missing values with the specified limit
     if interpolation_limit is not None:
-        df['Sea Level'] = df['Sea Level'].interpolate(method='linear', limit=interpolation_limit)
+        df['Sea Level'] = df['Sea Level'].interpolate(method='linear',
+                                                      limit=interpolation_limit)
     else:
         df['Sea Level'] = df['Sea Level'].interpolate(method='linear')
 
@@ -578,29 +579,30 @@ def main():
 # Data loading and Joining
     all_data = pd.DataFrame()
     if os.path.isdir(args.data_path):
-        data_files = [os.path.join(args.data_path, f) 
+        data_files = [os.path.join(args.data_path, f)
             for f in os.listdir(args.data_path) if f.endswith('.txt')]
         if not data_files:
             print(f"Error: No .txt files found in directory '{args.data_path}'.",
                   file=sys.stderr)
             sys.exit(1)
-        
-        # Read and join all data files in the directory
+
+        data_files.sort() # Process files in a consistent order
         for i, f in enumerate(data_files):
             try:
-                current_data = read_tidal_data(f)
+                current_data = read_tidal_data(f) # Assumes read_tidal_data is defined
                 if current_data.empty:
-                    print(f"Warning: No valid data loaded from {f}. Skipping.", file=sys.stderr)
+                    if args.verbose:
+                        print(f"Warning: No valid data loaded from {f}. Skipping.", file=sys.stderr)
                     continue
                 if all_data.empty:
                     all_data = current_data
                 else:
-                    all_data = join_data(all_data, current_data)
+                    all_data = join_data(all_data, current_data) # Assumes join_data is defined
                 if args.verbose:
                     print(f"Loaded and joined data from {f}.")
             except (FileNotFoundError, ValueError) as e:
                 print(f"Error processing file {f}: {e}", file=sys.stderr)
-                continue
+                continue # Continue to the next file
     elif os.path.isfile(args.data_path) and args.data_path.endswith('.txt'):
         try:
             all_data = read_tidal_data(args.data_path)
@@ -610,85 +612,50 @@ def main():
             print(f"Error loading file {args.data_path}: {e}", file=sys.stderr)
             sys.exit(1)
     else:
-        print(f"Error: Invalid data_path '{args.data_path}'. Must be a .txt file or a directory.", file=sys.stderr)
+        print(f"Error: Invalid data_path '{args.data_path}'. Must be a .txt file or a directory.",
+              file=sys.stderr)
         sys.exit(1)
 
     if all_data.empty:
         print("Error: No valid data loaded for analysis. Exiting.", file=sys.stderr)
         sys.exit(1)
-    
+
     # Get longest contiguous block of data
     processed_data = get_longest_contiguous_data(all_data)
     if processed_data.empty:
-        print("Error: No contiguous valid sea level data found after initial loading. Exiting.", file=sys.stderr)
+        print("Error: No contiguous valid sea level data found after initial loading. Exiting.",
+              file=sys.stderr)
         sys.exit(1)
-    
-    # --- Date Sectioning ---
+
+    # Date Sectioning
     if args.start_date or args.end_date:
         if args.start_date and args.end_date:
             try:
-                processed_data = extract_section_remove_mean(args.start_date, args.end_date, processed_data)
+                processed_data = extract_section_remove_mean(args.start_date,
+                                                             args.end_date, processed_data)
                 if processed_data.empty:
-                    print(f"Warning: No data found for the specified period {args.start_date}-{args.end_date}.", file=sys.stderr)
+                    print(f"Warning: No data found for the specified period"
+                        f"{args.start_date}-{args.end_date}.",
+                        file=sys.stderr)
+                   # Program will exit if processed_data is empty in the next check 
             except ValueError as e:
                 print(f"Error with date range: {e}", file=sys.stderr)
                 sys.exit(1)
         else:
-            print("Error: Both --start-date and --end-date must be provided if one is used.", file=sys.stderr)
+            print("Error: Both --start-date and --end-date must be provided if one is used.",
+                file=sys.stderr)
             sys.exit(1)
 
     if processed_data.empty:
-        print("Error: No data available after applying date filters. Exiting.", file=sys.stderr)
+        print("Error: No data available after applying date filters. Exiting.",
+            file=sys.stderr)
         sys.exit(1)
 
     if args.verbose:
-        print(f"Data for analysis spans from {processed_data.index.min()} to {processed_data.index.max()}.")
+        print(f"Data for analysis spans from {processed_data.index.min()}"
+            f" to {processed_data.index.max()}.")
         print(f"Number of data points: {len(processed_data)}")
-
-
-    tz = pytz.timezone("UTC") 
-    start_epoch = processed_data.index.min().to_pydatetime().astimezone(tz)
-    time_hours, sea_level_values = _prepare_tidal_analysis_inputs(
-        processed_data, start_epoch
-    )
-
-    # --- Tidal Analysis ---
-    if args.verbose:
-        print(f"Performing tidal analysis with constituents: {', '.join(args.constituents)}")
-        print(f"Using analysis epoch: {start_epoch}")
-        print(f"Using latitude: {args.latitude}")
-
-    amplitudes, phases = np.full(len(args.constituents), np.nan), np.full(len(args.constituents), np.nan) # Initialize with NaNs
-    try:
-        # Pass processed_data to tidal_analysis, as it handles the masking internally
-        amplitudes, phases = tidal_analysis(
-            processed_data,
-            args.constituents,
-            start_epoch,
-            args.latitude
-        )
-        if args.verbose:
-            print("\nTidal Analysis Results:")
-            for i, const in enumerate(args.constituents):
-                print(f"  {const}: Amplitude={amplitudes[i]:.4f}, Phase={phases[i]:.4f}")
-    except EnvironmentError as e: # Catch utide not available error
-        print(f"Error: {e}", file=sys.stderr)
-        print("Tidal analysis skipped.", file=sys.stderr)
-    except Exception as e:
-        print(f"An unexpected error occurred during tidal analysis: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
-    # --- Sea Level Rise Regression ---
-    if args.regression:
-        if args.verbose:
-            print("\nCalculating sea level rise trend...")
-        slope, p_value = sea_level_rise(processed_data)
-        if not np.isnan(slope) and not np.isnan(p_value):
-            print(f"\nSea Level Rise (mm/year): {slope * 365.25:.4f}") # Slope is per day, convert to mm/year
-            print(f"Regression p-value: {p_value:.4f}")
-        else:
-            print("Could not calculate sea level rise: insufficient valid data points.")
 
 if __name__ == "__main__":
     main()
+    
