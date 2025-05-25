@@ -435,7 +435,7 @@ def tidal_analysis(
             nodal=True,
             trend=True
         )
-    except Exception as e_solve:
+    except Exception as e_solve: # Catch specific utide errors if possible
         print(f"Error during utide.solve: {e_solve}", file=sys.stderr)
         nan_array = np.full(len(constituents), np.nan)
         return nan_array, nan_array
@@ -487,14 +487,37 @@ Returns:
                   block. Returns an empty DataFrame if no such block is found
                   (e.g., 'Sea Level' is all NaN or input is empty).
     """
-    time_diff = data.index.to_series().diff()
-    expected_gap = pd.Timedelta(hours=1)
-    breaks = time_diff != expected_gap
-    breaks.iloc[0] = True  
-    segment_ids = breaks.cumsum()
-    longest_segment_id = segment_ids.value_counts().idxmax()
-    return data[segment_ids == longest_segment_id]
+    if 'Sea Level' not in data.columns:
+        raise ValueError("DataFrame must contain a 'Sea Level' column.")
+    if not isinstance(data.index, pd.DatetimeIndex):
+        raise ValueError("DataFrame index must be a DatetimeIndex.")
 
+    sea_level_series = data['Sea Level']
+    valid_data = sea_level_series.notna()
+
+    # Helper to create an empty DataFrame matching the input's index properties
+    def _create_empty_df_like_input():
+        return pd.DataFrame(
+            columns=data.columns,
+            index=pd.DatetimeIndex([], name=data.index.name, tz=data.index.tz)
+        )
+    if not valid_data.any():
+        return _create_empty_df_like_input()
+    groups = valid_data.ne(valid_data.shift()).cumsum()
+    valid_data_groups = groups[valid_data]
+
+    if valid_data_groups.empty:
+        return _create_empty_df_like_input()
+
+    longest_group_id = valid_data_groups.value_counts().idxmax()
+    longest_block_indices = valid_data_groups[valid_data_groups == longest_group_id].index
+
+    if not longest_block_indices.empty:
+        start_index = longest_block_indices[0]
+        end_index = longest_block_indices[-1]
+        return data.loc[start_index:end_index]
+
+        return _create_empty_df_like_input()
 def main():
     """
     Main function to parse arguments and run tidal analysis.
