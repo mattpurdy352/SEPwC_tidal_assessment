@@ -46,26 +46,21 @@ def _prepare_tidal_analysis_inputs(
     data: pd.DataFrame,
     start_datetime_epoch: datetime
 ) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Prepares time (in hours from epoch) and sea level arrays for tidal analysis.
+    """Extracts time (hours from epoch) and sea level arrays for tidal analysis.
 
-    Handles timezone consistency between the data's DatetimeIndex and the
-    start_datetime_epoch. Assumes data.index is already localized (e.g., to UTC).
+    Aligns data.index (assumed localized, e.g., UTC) with the timezone-aware
+    start_datetime_epoch for consistent time calculations.
 
-    Args:
-        data (pd.DataFrame): Input DataFrame with a DatetimeIndex and
-                             'Sea Level' column.
-        start_datetime_epoch (datetime): The reference datetime (t=0) for the
-                                         analysis. Must be timezone-aware.
+Args:
+    data (pd.DataFrame): DataFrame with DatetimeIndex and 'Sea Level' column.
+    start_datetime_epoch (datetime): Timezone-aware reference datetime (t=0).
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]:
-            time_hours (np.ndarray): Time in hours since start_datetime_epoch.
-            sea_level_values (np.ndarray): NumPy array of sea level values.
+Returns:
+    tuple[np.ndarray, np.ndarray]: Time array (hours from epoch), sea level array.
 
-    Raises:
-        TypeError: If data.index is not a DatetimeIndex.
-        ValueError: If timezone consistency cannot be achieved or data is unsuitable.
+Raises:
+    TypeError: If 'data.index' is not a DatetimeIndex.
+    ValueError: For timezone errors or unsuitable data.
     """
     if not isinstance(data.index, pd.DatetimeIndex):
         raise TypeError("Input 'data' must have a pandas DatetimeIndex.")
@@ -362,13 +357,12 @@ def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
     return combined_data.sort_index()
 
 def sea_level_rise(data: pd.DataFrame, interpolation_limit: Optional[int] = None) -> tuple[float, float]:
-    """
-    Calculates the linear regression slope (trend) and p-value for sea level data.
-    Assumes 'data' comes from the improved read_tidal_data.
-    Allows for limited interpolation of remaining NaNs.
-    If interpolation_limit is None, NaNs are dropped.
-    If interpolation_limit is an int, NaNs are interpolated up to that limit.
-    """
+     """
+    Performs linear regression on sea level data to determine the rate of sea level rise.
+    It assumes the input 'Sea Level' data is numerically in decameters and converts
+    it to meters internally. The returned slope is in meters/day.
+
+    Parameter"""
     if not (isinstance(data, pd.DataFrame) and
             isinstance(data.index, pd.DatetimeIndex) and
             'Sea Level' in data.columns):
@@ -519,6 +513,16 @@ def tidal_analysis(
     return amplitudes, phases
 
 def get_longest_contiguous_data(data):
+     """Finds the longest contiguous block of non-NaN 'Sea Level' data.
+
+Args:
+    data (pd.DataFrame): Input DataFrame with a 'Sea Level' column and DatetimeIndex.
+
+Returns:
+    pd.DataFrame: Slice of `data` with the longest contiguous non-NaN 'Sea Level'
+                  block. Returns an empty DataFrame if no such block is found
+                  (e.g., 'Sea Level' is all NaN or input is empty).
+    """
     time_diff = data.index.to_series().diff()
     expected_gap = pd.Timedelta(hours=1)
     breaks = time_diff != expected_gap
