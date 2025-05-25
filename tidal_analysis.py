@@ -15,6 +15,7 @@ import pandas as pd
 import pytz
 from scipy.stats import linregress
 
+# Attempt to import utide
 try:
     from utide import solve, reconstruct
 except ImportError:
@@ -24,9 +25,12 @@ except ImportError:
     solve = None
     reconstruct = None
 
+# Constants
 SECONDS_PER_HOUR = 3600.0
 MIN_DATAPOINTS_PER_CONSTITUENT = 2
+# Number of header lines to skip in the specific data file format
 NUM_FILE_HEADER_LINES_TO_SKIP: int = 11
+# Expected column names after skipping headers and providing names to read_csv
 EXPECTED_RAW_COLUMN_NAMES: list[str] = [
     'Cycle', 'Date_str', 'Time_str', 'Sea_Level_Raw', 'Residual_Raw'
 ]
@@ -361,7 +365,7 @@ def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
         )
 
     combined_data = pd.concat([data1, data2])
-    # Remove duplicates based on index, keeping the first occurrence
+    # Remove duplicates based on index, keeping the first occurrence.
     combined_data = combined_data[~combined_data.index.duplicated(keep='first')]
     combined_data = combined_data.sort_index()
     return combined_data
@@ -372,7 +376,7 @@ def sea_level_rise(data: pd.DataFrame, interpolation_limit: int = None) -> tuple
     """
     df = data.copy()
 
-    # Interpolate missing values with the specified limit
+    # Interpolate missing values with the specified limit.
     if interpolation_limit is not None:
         df['Sea Level'] = df['Sea Level'].interpolate(method='linear',
                                                       limit=interpolation_limit)
@@ -381,13 +385,13 @@ def sea_level_rise(data: pd.DataFrame, interpolation_limit: int = None) -> tuple
 
     df.dropna(subset=['Sea Level'], inplace=True)
 
-    # Prepare time series (days from start) and sea level data
+    # Prepare time series (days from start) and sea level data.
     reference_date = df.index.min()
     x = np.array([(timestamp - reference_date).total_seconds() / (24 * 3600)
                   for timestamp in df.index], dtype=float)
     y = df['Sea Level'].values.astype(float)
 
-    # Perform linear regression
+    # Perform linear regression.
     slope_val, _, _, p_val, _ = linregress(x, y)
 
     return float(slope_val), float(p_val)
@@ -436,7 +440,7 @@ def tidal_analysis(
             nodal=True,
             trend=True
         )
-    except Exception as e_solve: # Catch specific utide errors if possible
+    except Exception as e_solve: # Catch specific utide errors if possible.
         print(f"Error during utide.solve: {e_solve}", file=sys.stderr)
         nan_array = np.full(len(constituents), np.nan)
         return nan_array, nan_array
@@ -496,7 +500,7 @@ Returns:
     sea_level_series = data['Sea Level']
     valid_data = sea_level_series.notna()
 
-    # Helper to create an empty DataFrame matching the input's index properties
+    # Helper to create an empty DataFrame matching the input's index properties.
     def _create_empty_df_like_input():
         return pd.DataFrame(
             columns=data.columns,
@@ -576,7 +580,7 @@ def main():
     )
 
     args = parser.parse_args()
-# Data loading and Joining
+# Data loading and Joining.
     all_data = pd.DataFrame()
     if os.path.isdir(args.data_path):
         data_files = [os.path.join(args.data_path, f)
@@ -620,14 +624,14 @@ def main():
         print("Error: No valid data loaded for analysis. Exiting.", file=sys.stderr)
         sys.exit(1)
 
-    # Get longest contiguous block of data
+    # Get longest contiguous block of data.
     processed_data = get_longest_contiguous_data(all_data)
     if processed_data.empty:
         print("Error: No contiguous valid sea level data found after initial loading. Exiting.",
               file=sys.stderr)
         sys.exit(1)
 
-    # Date Sectioning
+    # Date Sectioning.
     if args.start_date or args.end_date:
         if args.start_date and args.end_date:
             try:
@@ -637,7 +641,7 @@ def main():
                     print(f"Warning: No data found for the specified period"
                         f"{args.start_date}-{args.end_date}.",
                         file=sys.stderr)
-                   # Program will exit if processed_data is empty in the next check 
+                   # Program will exit if processed_data is empty in the next check
             except ValueError as e:
                 print(f"Error with date range: {e}", file=sys.stderr)
                 sys.exit(1)
@@ -658,4 +662,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
