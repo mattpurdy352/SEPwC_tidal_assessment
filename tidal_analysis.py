@@ -366,58 +366,30 @@ def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
     combined_data = combined_data.sort_index()
     return combined_data
 
-class RegressionCalculationError(ValueError):
-    """Custom error for issues during regression analysis."""
-def sea_level_rise(data: pd.DataFrame, interpolation_limit: Optional[int] = None) -> tuple[float, float]:
+def sea_level_rise(data: pd.DataFrame, interpolation_limit: int = None) -> tuple[float, float]:
     """
-    Calculates the rate of sea level rise using linear regression.
-
-    The input DataFrame must have a datetime index and a 'Sea Level' column (in decameters).
-    Missing values are linearly interpolated, then converted to meters. The function
-    returns the slope of sea level rise (in meters per day) and the p-value of the fit.
-
-    Parameters:
-        data (pd.DataFrame): Time-indexed sea level data.
-        interpolation_limit (int, optional): Max number of missing values to fill. If invalid, all are filled.
-
-    Returns:
-        (float, float): Slope and p-value. Returns (nan, nan) on error.
+    Performs linear regression on sea level data to determine the rate of sea level rise.
     """
-    try:
-        if not isinstance(data, pd.DataFrame) or 'Sea Level' not in data.columns \
-            or not isinstance(data.index, pd.DatetimeIndex) or data.empty:
-            raise RegressionCalculationError("Invalid input data.")
+    df = data.copy()
 
-        df = data.copy()
-        # Handle interpolation limit
-        if isinstance(interpolation_limit, int) and interpolation_limit > 0:
-            limit = interpolation_limit
-        else:
-            if interpolation_limit is not None:
-                print(f"Warning: Invalid 'interpolation_limit' value ({interpolation_limit}).",
-                      file=sys.stderr)
-            limit = None
+    # Interpolate missing values with the specified limit
+    if interpolation_limit is not None:
+        df['Sea Level'] = df['Sea Level'].interpolate(method='linear', limit=interpolation_limit)
+    else:
+        df['Sea Level'] = df['Sea Level'].interpolate(method='linear')
 
-        df['Sea Level'] = df['Sea Level'].interpolate(method='linear', limit=limit)
-        df.dropna(subset=['Sea Level'], inplace=True)
+    df.dropna(subset=['Sea Level'], inplace=True)
 
-        if len(df) < 2:
-            raise RegressionCalculationError("Insufficient data for regression.")
+    # Prepare time series (days from start) and sea level data
+    reference_date = df.index.min()
+    x = np.array([(timestamp - reference_date).total_seconds() / (24 * 3600)
+                  for timestamp in df.index], dtype=float)
+    y = df['Sea Level'].values.astype(float)
 
-        df['Sea Level'] /= 10.0  # Convert from decameters to meters
+    # Perform linear regression
+    slope_val, _, _, p_val, _ = linregress(x, y)
 
-        reference_date = df.index.min()
-        x = (df.index - reference_date).total_seconds() / (24 * 3600)
-        y = df['Sea Level'].values.astype(float)
-
-        if len(x) < 2 or np.all(x == x[0]):
-            raise RegressionCalculationError("Invalid x values for regression.")
-
-        slope, _, _, p_val, _ = linregress(x, y)
-        return float(slope), float(p_val)
-
-    except (RegressionCalculationError, ValueError):
-        return np.nan, np.nan
+    return float(slope_val), float(p_val)
 
 def _load_and_combine_data_from_directory(directory_path: str, is_verbose: bool) -> pd.DataFrame | None:
     """
