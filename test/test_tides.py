@@ -179,7 +179,7 @@ class TestTidalAnalysis():
         data2 = read_tidal_data(gauge_files[0])
         data = join_data(data1, data2)
 
-        slope, p_value = sea_level_rise(data)
+        slope, p_value = sea_level_rise(data, interpolation_limit=88)
         
         assert slope == pytest.approx(2.94e-05, abs=1e-6)
         assert p_value == pytest.approx(0.427,abs=0.1)
