@@ -575,12 +575,14 @@ def main():
     )
 
     args = parser.parse_args()
-
+# Data loading and Joining
     all_data = pd.DataFrame()
     if os.path.isdir(args.data_path):
-        data_files = [os.path.join(args.data_path, f) for f in os.listdir(args.data_path) if f.endswith('.txt')]
+        data_files = [os.path.join(args.data_path, f) 
+            for f in os.listdir(args.data_path) if f.endswith('.txt')]
         if not data_files:
-            print(f"Error: No .txt files found in directory '{args.data_path}'.", file=sys.stderr)
+            print(f"Error: No .txt files found in directory '{args.data_path}'.",
+                  file=sys.stderr)
             sys.exit(1)
         
         # Read and join all data files in the directory
