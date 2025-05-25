@@ -137,8 +137,6 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
             "comments/blanks after header skip).", file=sys.stderr
         )
         return _create_empty_tidal_df()
-
-
     data_to_process = data.copy()
     valid_strings_condition = (
         data_to_process['Date_str'].str.strip().ne('') &
@@ -152,8 +150,6 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
             "after filtering empty strings.", file=sys.stderr
         )
         return _create_empty_tidal_df()
-
-
     data_to_process['Timestamp_str'] = (
         data_to_process['Date_str'] + ' ' + data_to_process['Time_str']
     )
@@ -166,7 +162,7 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
     data_to_process = data_to_process.dropna(subset=['Time'])
     dropped_for_time = original_row_count - len(data_to_process)
     if dropped_for_time > 0:
-         print(f"DEBUG read_tidal_data({filename}): Dropped {dropped_for_time} rows due to unparseable timestamps.")
+         print(f"Dropped {dropped_for_time} rows due to unparseable timestamps.")
 
     data_to_process['Sea Level'] = pd.to_numeric(
     data_to_process['Sea_Level_Raw'],
@@ -186,7 +182,7 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
             value_str = str(value_str) # Coerce just in case
 
         s = value_str.strip()
-        if s == '-99.0000N' or s == '-99.000N' or s == '-99N' or s == '-99.0N' or s == '-99.':
+        if s in ('-99.0000N', '-99.000N', '-99N', '-99.0N', '-99.'):
             return np.nan
         if s.upper().endswith('M'):
             return pd.to_numeric(s[:-1], errors='coerce')
@@ -195,7 +191,8 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
     data_to_process['Sea Level'] = data_to_process['Sea_Level_Raw'].apply(custom_parse_sea_level)
     
     nans_after_custom_parse = data_to_process['Sea Level'].isna().sum()
-    print(f"DEBUG read_tidal_data({filename}): NaNs in 'Sea Level' after custom parsing: {nans_after_custom_parse}")
+    print(f"DEBUG read_tidal_data({filename}):" 
+        "NaNs in 'Sea Level' after custom parsing: {nans_after_custom_parse}")
 
     data_to_process = data_to_process.set_index('Time')
     if data_to_process.index.tz is None:
