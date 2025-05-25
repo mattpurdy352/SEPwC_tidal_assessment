@@ -1,20 +1,26 @@
-#!/usr/bin/env python3
+"""
+UK Tidal Analysis Script
+
+This script performs tidal analysis on sea level data. It can read tidal data,
+reconstruct tidal signals using specified constituents, and plot the observed
+sea level against the reconstructed tide and residuals.
+The analysis functions may rely on the 'utide' library.
+"""
 import argparse
 import os
-from datetime import datetime # datetime class from datetime module
+from datetime import datetime
 import sys
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytz
 from scipy.stats import linregress
-from typing import Optional
 
 try:
     from utide import solve, reconstruct
 except ImportError:
     print("Warning: 'utide' library not found. "
-          "Functions 'solve' and 'reconstruct' will not be available.")
+        "Functions 'solve' and 'reconstruct' will not be available.",
+        file=sys.stderr)
     solve = None
     reconstruct = None
 
@@ -86,10 +92,10 @@ def _prepare_tidal_analysis_inputs(
             raise ValueError(error_message) from e_tz_convert
 
     time_diff = data.index - current_epoch_pd_timestamp
-    time_hours = time_diff.total_seconds() / SECONDS_PER_HOUR
+    time_hours = time_diff.total_seconds() / SECONDS_PER_HOUR * 24.0
     sea_level_values = data['Sea Level'].values
 
-    return time_hours, sea_level_values
+    return time_days, sea_level_values
 
 def _create_empty_tidal_df() -> pd.DataFrame:
     """Creates a standard empty DataFrame for tidal data scenarios."""
