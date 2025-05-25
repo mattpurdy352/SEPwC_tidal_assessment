@@ -268,6 +268,8 @@ def extract_section_remove_mean(
         pd.DataFrame: A DataFrame subset for the period with mean sea level removed.
                       Returns a standard empty DataFrame on invalid input or no data.
     """
+    # Initialize section_data to a default empty DataFrame.
+    # This ensures it's always defined, even if early returns or exceptions occur.
     if not (isinstance(data, pd.DataFrame) and
             isinstance(data.index, pd.DatetimeIndex) and
             'Sea Level' in data.columns):
@@ -287,10 +289,13 @@ def extract_section_remove_mean(
             hour=23, minute=59, second=59, microsecond=999999
         )
     except ValueError as exc:
+        # section_data remains an empty DataFrame if this ValueError is re-raised,
+        # bypassing any subsequent return. Initialization is for robustness in other paths.
         raise ValueError(
             f"Start date '{start_date_str}' or end date '{end_date_str}' "
             "is not in the correct 'YYYYMMDD' format."
         ) from exc
+    # Default to using naive datetimes if data.index is naive
     start_dt_aware, end_dt_aware = start_dt_naive, end_dt_naive
     if data.index.tz is not None:
         try:
@@ -306,8 +311,8 @@ def extract_section_remove_mean(
             start_dt_aware = start_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
             end_dt_aware = end_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
     elif (start_dt_naive.tzinfo is not None or end_dt_naive.tzinfo is not None):
-        # This case should ideally not be reached if read_tidal_data is consistent.
-        # This raise also means section_data isn't assigned, so initialization helps.
+        # This path (ideally avoided if read_tidal_data is consistent) raises an error.
+        # Thus, section_data isn't assigned here, making its prior initialization useful..
         raise ValueError(
             "Timezone inconsistency: data.index is naive but parsed start/end dates "
             "are (or became) aware."
@@ -316,6 +321,8 @@ def extract_section_remove_mean(
          print("Warning: Performing naive datetime comparison in "
                "extract_section_remove_mean as data.index is naive. "
                "Ensure data from read_tidal_data is UTC aware.", file=sys.stderr)
+    # This is where section_data gets its proper value, but it's already defined
+    # so no UnboundLocalError occurs if previous conditions prevent this line from running.
     section_data = data[
         (data.index >= start_dt_aware) & (data.index <= end_dt_aware)
     ].copy()
@@ -354,7 +361,10 @@ def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
         )
 
     combined_data = pd.concat([data1, data2])
-    return combined_data.sort_index()
+    # Remove duplicates based on index, keeping the first occurrence
+    combined_data = combined_data[~combined_data.index.duplicated(keep='first')]
+    combined_data = combined_data.sort_index()
+    return combined_data
 
 def sea_level_rise(data: pd.DataFrame, interpolation_limit: Optional[int] = None) -> tuple[float, float]:
      """
