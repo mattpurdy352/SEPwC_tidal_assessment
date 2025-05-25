@@ -25,7 +25,7 @@ except ImportError:
     reconstruct = None
 
 SECONDS_PER_HOUR = 3600.0
-MIN_DATAPOINTS_PER_CONSTITUENT = 2 
+MIN_DATAPOINTS_PER_CONSTITUENT = 2
 NUM_FILE_HEADER_LINES_TO_SKIP: int = 11
 EXPECTED_RAW_COLUMN_NAMES: list[str] = [
     'Cycle', 'Date_str', 'Time_str', 'Sea_Level_Raw', 'Residual_Raw'
@@ -189,9 +189,9 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
         return pd.to_numeric(s, errors='coerce')
 
     data_to_process['Sea Level'] = data_to_process['Sea_Level_Raw'].apply(custom_parse_sea_level)
-    
+
     nans_after_custom_parse = data_to_process['Sea Level'].isna().sum()
-    print(f"DEBUG read_tidal_data({filename}):" 
+    print(f"DEBUG read_tidal_data({filename}):"
         "NaNs in 'Sea Level' after custom parsing: {nans_after_custom_parse}")
 
     data_to_process = data_to_process.set_index('Time')
@@ -203,7 +203,7 @@ def read_tidal_data(filename: str) -> pd.DataFrame:
     return data_to_process[['Sea Level']]
 
 def extract_single_year_remove_mean(
-    year: [int, str],  
+    year: [int, str],
     data: pd.DataFrame
 ) -> pd.DataFrame:
     """
@@ -226,7 +226,6 @@ def extract_single_year_remove_mean(
         )
         print(warning_message, file=sys.stderr)
         return _create_empty_tidal_df()
-
     if data.empty:
         return _create_empty_tidal_df()
 
@@ -297,7 +296,7 @@ def extract_section_remove_mean(
             f"Start date '{start_date_str}' or end date '{end_date_str}' "
             "is not in the correct 'YYYYMMDD' format."
         ) from exc
-
+    start_dt_aware, end_dt_aware = start_dt_naive, end_dt_naive
     if data.index.tz is not None:
         try:
             start_dt_aware = start_dt_naive.tz_localize(data.index.tz)
@@ -312,6 +311,8 @@ def extract_section_remove_mean(
             start_dt_aware = start_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
             end_dt_aware = end_dt_naive.tz_localize('UTC').tz_convert(data.index.tz)
     elif (start_dt_naive.tzinfo is not None or end_dt_naive.tzinfo is not None):
+        # This case should ideally not be reached if read_tidal_data is consistent.
+        # This raise also means section_data isn't assigned, so initialization helps.
         raise ValueError(
             "Timezone inconsistency: data.index is naive but parsed start/end dates "
             "are (or became) aware."
@@ -320,8 +321,6 @@ def extract_section_remove_mean(
          print("Warning: Performing naive datetime comparison in "
                "extract_section_remove_mean as data.index is naive. "
                "Ensure data from read_tidal_data is UTC aware.", file=sys.stderr)
-
-
     section_data = data[
         (data.index >= start_dt_aware) & (data.index <= end_dt_aware)
     ].copy()
@@ -339,10 +338,8 @@ def extract_section_remove_mean(
             f"({start_date_str}-{end_date_str}) is not numeric. Mean not removed."
         )
         print(warning_message, file=sys.stderr)
-
     return section_data
-    
-     
+
 def join_data(data1: pd.DataFrame, data2: pd.DataFrame) -> pd.DataFrame:
     """
     Joins two tidal DataFrames and sorts them by their DatetimeIndex.
